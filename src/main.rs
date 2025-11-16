@@ -64,8 +64,23 @@ async fn main() -> anyhow::Result<()> {
             .await
             .context("Failed to parse iplist")?;
 
+        if let Err(e) = ips {
+            error!("Failed to parse iplist '{}': {}", source.name, e);
+            continue;
+        }
+
+        let ips = ips?;
+
+        if ips.len() > cfg.application.max_items_in_list {
+            warn!(
+                "IP list '{}' exceeds max items limit of {}, skipping",
+                source.name, cfg.application.max_items_in_list
+            );
+            continue;
+        }
+
         if !cfg.application.dry_run {
-            mongo::upsert_iplist(&db, &source.name, ips?, &cfg.application.site_name)
+            mongo::upsert_iplist(&db, &source.name, ips, &cfg.application.site_name)
                 .await
                 .context(format!("Failed to upsert iplist '{}'", source.name))?;
         } else {

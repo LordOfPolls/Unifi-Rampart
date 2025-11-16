@@ -108,30 +108,49 @@ Test on non-production controllers first to avoid bringing your controller to it
 
 ## Common Questions
 
-**Will this break existing firewall rules?**
+### My console says `Gateway Configuration Failed`
+One of the firewall groups you've enabled is too large for your controller.
+Reduce the number of IPs in each group, or disable the feed.
+
+Unifi will refuse to load a config if there is a list that is too large, even if it isn't used in any rules. 
+You will need to manually delete the offending groups from the controller.
+Run this command in ssh to get the ID of the offending group, you
+```bash
+sudo cat /usr/lib/unifi/logs/server.log | grep -E "ERROR|WARN" | grep -v "trafficFlow"
+```
+Use the IDs shown in the error messages to delete the groups, and disable the corresponding feeds in the config.
+
+I am trying to find out what the maximum size of a firewall group is, but haven't found it yet ~~ I think its around 10k.
+
+### Will this break existing firewall rules?
 
 No. The tool only creates or updates firewall ip groups. Your existing rules stay untouched. The groups appear like any other address group in your controller.
 You are expected to use these groups in your own firewall rules.
 
-**What happens if a blocklist source is down?**
+
+### What happens if a blocklist source is down?
 
 The tool logs the error and continues processing other sources. One failed feed won't block the entire sync.
 
-**Can I use this with UniFi Dream Machine / Cloud Key / Cloud-hosted controllers?**
+
+### Can I use this with UniFi Dream Machine / Cloud Key / Cloud-hosted controllers?
 
 I have only tested this on UDM Pro and SE, but it should work on other UniFi devices.
 
-**How do I actually use these firewall groups in rules?**
+
+### How do I actually use these firewall groups in rules?
 
 In your UniFi Controller: **Settings → Firewall & Security → LAN → Create Rule**. Set the source or destination to the firewall group name (e.g., `Firehol_level1`), then configure your block/reject action.
 
-**Should I enable all the feeds?**
+
+### Should I enable all the feeds?
 
 No. 
 
 Start with conservative feeds (Firehol level1, Spamhaus DROP) and monitor for false positives. Adding every feed is how you accidentally block legitimate services. Tor exit nodes, for example, are only malicious if your threat model says so.
 
-**Multiple sites?**
+
+### Multiple sites?
 
 Change the `site_name` in config.toml to match your site (visible in the UniFi URL: `/manage/site/your_site_name`).
 

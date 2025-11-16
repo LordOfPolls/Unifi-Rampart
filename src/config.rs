@@ -33,6 +33,7 @@ pub struct ApplicationConfig {
     pub log_level: String,
     pub site_name: String,
     pub excluded: Vec<String>,
+    pub max_items_in_list: usize,
     pub dry_run: bool,
     pub allow_insecure_requests: bool,
 }

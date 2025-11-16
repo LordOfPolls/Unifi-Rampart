@@ -3,9 +3,10 @@ connection_url = "mongodb://127.0.0.1:27117"
 database_name = "ace"  # You shouldnt need to change this 
 
 [application]
-log_level = "info"
+log_level = "debug"
 site_name = "default"
 allow_insecure_requests = false
+max_items_in_list = 10_000
 dry_run = false
 excluded = [
     "10.0.0.0/8",
@@ -22,17 +23,17 @@ excluded = [
 [[iplists.sources]]
 name = "Firehol_level1"
 url = "https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level1.netset"
-enabled = true
+enabled = false
 
 [[iplists.sources]]
 name = "Firehol_level2"
 url = "https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level2.netset"
-enabled = false
+enabled = false  # likely to overwhelm unifi - could cause "Gateway Configuration Failed" errors
 
 [[iplists.sources]]
 name = "Firehol_level3"
 url = "https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level3.netset"
-enabled = false
+enabled = false  # likely to overwhelm unifi - could cause "Gateway Configuration Failed" errors
 
 [[iplists.sources]]
 name = "Firehol_webserver"
@@ -62,12 +63,12 @@ enabled = false
 [[iplists.sources]]
 name = "Blocklist-de"
 url = "https://www.blocklist.de/downloads/export-ips_all.txt"
-enabled = false
+enabled = false  # likely to overwhelm unifi - could cause "Gateway Configuration Failed" errors
 
 [[iplists.sources]]
 name = "CI-Badguys"
 url = "https://cinsscore.com/list/ci-badguys.txt"
-enabled = false
+enabled = false  # likely to overwhelm unifi - could cause "Gateway Configuration Failed" errors
 
 [[iplists.sources]]
 name = "Cloudflare_Servers"
