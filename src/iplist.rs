@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use ipnetwork::IpNetwork;
-use log::{debug, info};
+use log::{debug, info, warn};
 use regex::Regex;
 use std::net::IpAddr;
 
@@ -79,6 +79,10 @@ pub async fn download(url: &str, excluded: &[String]) -> Result<Vec<String>> {
         .await
         .context("Failed to download iplist")?;
 
+    if resp.status() != 200 {
+        return Err(anyhow::anyhow!("Failed to download iplist: {}", resp.status()));
+    }
+
     debug!("Response status: {}", resp.status());
 
     let text = resp.text().await.context("Failed to read response body")?;
@@ -96,12 +100,16 @@ pub async fn download(url: &str, excluded: &[String]) -> Result<Vec<String>> {
     let re = Regex::new(STRIP_COMMENTS_REGEX).unwrap();
     lines = lines
         .iter()
-        .map(|s| re.replace_all(s, "").to_string())
+        .map(|s| re.replace_all(s, "").to_string().trim().to_string())
         .collect();
 
     let downloaded_count = lines.len();
 
     let (filtered_lines, excluded_count) = filter_excluded(lines, excluded);
+
+    if filtered_lines.is_empty() {
+        warn!("No IP addresses found in {}. This is probably fine, but check your exclusion rules.", url);
+    }
 
     info!(
         "Downloaded {} IP addresses from iplist, filtered {} excluded IPs, keeping {}",
