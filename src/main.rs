@@ -60,7 +60,7 @@ async fn main() -> anyhow::Result<()> {
             .await
             .context(format!("Failed to download iplist '{}'", source.name))?;
 
-        let ips = iplist::parse(&source, &cfg.application.excluded, resp)
+        let ips = iplist::parse(source, &cfg.application.excluded, resp)
             .await
             .context("Failed to parse iplist")?;
 

@@ -106,6 +106,10 @@ pub async fn parse(source: &IpListSource, excluded: &[String], resp: Response) -
             crate::parsers::aws::parse(&text)
                 .context("Failed to parse AWS IP ranges")?
         },
+        Some("Google") => {
+            crate::parsers::google::parse(&text)
+                .context("Failed to parse Google Cloud IP ranges")?
+        }
         _ => {
             text
                 .lines()

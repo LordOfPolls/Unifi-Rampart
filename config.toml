@@ -79,3 +79,9 @@ name = "AWS_Servers"
 url = "https://ip-ranges.amazonaws.com/ip-ranges.json"
 handler = "AWS"
 enabled = false
+
+[[iplists.sources]]
+name = "Google_Servers"
+url = "https://www.gstatic.com/ipranges/cloud.json"
+handler = "Google"
+enabled = false
