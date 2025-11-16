@@ -81,41 +81,50 @@ pub async fn upsert_iplist(
     iplist: Vec<String>,
     site_name: &str,
 ) -> Result<()> {
-    debug!("Checking if firewall group '{}' exists", group_name);
     let col: mongodb::Collection<Document> = db.collection("firewallgroup");
     let filter = doc! {"name": group_name};
 
-    if col.find_one(filter.clone(), None).await?.is_none() {
-        info!(
-            "Firewall group '{}' not found, creating new group",
-            group_name
-        );
+    // only used for logging
+    let exists = col.find_one(filter.clone(), None).await?.is_some();
+
+    if !exists {
+        info!("Firewall group '{}' not found, will create", group_name);
         let site_id = get_site_id(db, site_name).await?;
 
-        col.insert_one(
-            doc! {
-                "name": group_name,
-                "group_type": "address-group",
-                "site_id": site_id
-            },
-            None,
-        )
-        .await
-        .context("Failed to insert new firewall group")?;
-        info!("Created new firewall group '{}'", group_name);
-    } else {
-        debug!("Firewall group '{}' already exists", group_name);
-    }
+        let update = doc! {
+              "$setOnInsert": {
+                  "name": group_name,
+                  "group_type": "address-group",
+                  "site_id": site_id
+              },
+              "$set": {
+                  "group_members": iplist
+              }
+          };
 
-    info!(
-        "Updating firewall group '{}' with {} IP addresses",
-        group_name,
-        iplist.len()
-    );
-    col.update_one(filter, doc! {"$set": {"group_members": iplist}}, None)
-        .await
-        .context("Failed to update firewall group")?;
-    info!("Successfully updated firewall group '{}'", group_name);
+        let options = mongodb::options::UpdateOptions::builder()
+            .upsert(true)
+            .build();
+
+        col.update_one(filter, update, options)
+            .await
+            .context("Failed to upsert firewall group")?;
+
+        info!("Created and updated firewall group '{}'", group_name);
+    } else {
+        info!("Updating existing firewall group '{}' with {} IP addresses",
+                group_name, iplist.len());
+
+        col.update_one(
+            filter,
+            doc! {"$set": {"group_members": iplist}},
+            None
+        )
+            .await
+            .context("Failed to update firewall group")?;
+
+        info!("Successfully updated firewall group '{}'", group_name);
+    }
 
     Ok(())
 }
