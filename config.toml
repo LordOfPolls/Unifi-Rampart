@@ -7,6 +7,7 @@ log_level = "debug"
 site_name = "default"
 allow_insecure_requests = false
 max_items_in_list = 10_000
+split_on_max_items = false
 dry_run = false
 excluded = [
     "10.0.0.0/8",

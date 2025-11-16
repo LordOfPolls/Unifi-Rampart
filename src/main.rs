@@ -72,11 +72,32 @@ async fn main() -> anyhow::Result<()> {
         let ips = ips?;
 
         if ips.len() > cfg.application.max_items_in_list {
-            warn!(
+            if !cfg.application.split_on_max_items {
+                warn!(
                 "IP list '{}' exceeds max items limit of {}, skipping",
                 source.name, cfg.application.max_items_in_list
             );
-            continue;
+                continue;
+            }
+            else{
+                // there are more than max items in the list, split it into multiple lists, and upsert each of them
+                // todo: if a list shrinks later, we should remove it from the database
+                // question would then be how to handle for any firewall groups that reference it...
+                warn!("IP list '{}' exceeds max items limit of {}, splitting into multiple lists", source.name, cfg.application.max_items_in_list);
+                let split_ips = ips.chunks(cfg.application.max_items_in_list - 1);
+
+                for (i, chunk) in split_ips.enumerate(){
+                    if cfg.application.dry_run {
+                        info!("Dry run enabled, not updating database");
+                        info!("IP list: {:?}", chunk);
+                    }else{
+                        mongo::upsert_iplist(&db, &format!("{}_{}", source.name, i), chunk.to_vec(), &cfg.application.site_name)
+                            .await
+                            .context(format!("Failed to upsert iplist '{}'", source.name))?;
+                    }
+                }
+                continue;
+            }
         }
 
         if !cfg.application.dry_run {

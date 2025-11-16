@@ -34,6 +34,7 @@ pub struct ApplicationConfig {
     pub site_name: String,
     pub excluded: Vec<String>,
     pub max_items_in_list: usize,
+    pub split_on_max_items: bool,
     pub dry_run: bool,
     pub allow_insecure_requests: bool,
 }
