@@ -1,5 +1,5 @@
 [mongodb]
-connection_url = "mongodb://127.0.0.1:27117"  # MongoDB connection string for UniFi Controller (default port 27117)
+connection_url = "mongodb://127.0.0.1:27117"  # MongoDB connection string for UniFi Controller
 database_name = "ace"  # You shouldnt need to change this 
 
 [application]
@@ -22,68 +22,147 @@ excluded = [  # IP ranges to exclude from downloaded blocklists
 [iplists]
 
 [[iplists.sources]]
-name = "Firehol_level1"  # Firewall group name in UniFi Controller
-url = "https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level1.netset"  # URL to download the IP blocklist from
-enabled = false  # Whether to download and sync this IP list
+name = "Firehol_level1"
+url = "https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level1.netset"
+enabled = false
+# FireHOL Level 1: Maximum protection with minimum false positives
+# Aggregated IP list providing baseline protection against known threats
+# Source: FireHOL blocklist-ipsets project (https://iplists.firehol.org)
 
 [[iplists.sources]]
 name = "Firehol_level2"
 url = "https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level2.netset"
-enabled = false  # likely to overwhelm unifi - could cause "Gateway Configuration Failed" errors
+enabled = false
+# FireHOL Level 2: More aggressive blocking than Level 1
+# Larger aggregated blocklist with increased coverage but potentially more false positives
+# WARNING: Large list size may overwhelm UniFi and cause "Gateway Configuration Failed" errors
+# Source: FireHOL blocklist-ipsets project (https://iplists.firehol.org)
 
 [[iplists.sources]]
 name = "Firehol_level3"
 url = "https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level3.netset"
-enabled = false  # likely to overwhelm unifi - could cause "Gateway Configuration Failed" errors
+enabled = false
+# FireHOL Level 3: Most aggressive blocking with maximum coverage
+# Very large aggregated blocklist - highest protection but increased risk of false positives
+# WARNING: Large list size may overwhelm UniFi and cause "Gateway Configuration Failed" errors
+# Source: FireHOL blocklist-ipsets project (https://iplists.firehol.org)
 
 [[iplists.sources]]
 name = "Firehol_webserver"
 url = "https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_webserver.netset"
 enabled = false
+# FireHOL Webserver: Web-specific threat blocklist
+# Tracks IPs hosting malware, bots, and servers with criminal history
+# Designed for web server protection - use on top of firehol_level1/2/3
+# Source: FireHOL blocklist-ipsets project (https://iplists.firehol.org)
 
 [[iplists.sources]]
 name = "Tor_Exit_Nodes"
 url = "https://check.torproject.org/torbulkexitlist"
 enabled = false
+# Tor Exit Nodes: List of Tor network exit nodes
+# Tor provides anonymity but can be used to bypass geographic restrictions or hide identity
+# Source: The Tor Project (https://www.torproject.org)
 
 [[iplists.sources]]
 name = "EmergingThreats_Compromised"
 url = "https://rules.emergingthreats.net/blockrules/compromised-ips.txt"
 enabled = false
+# Emerging Threats Compromised IPs: Known compromised hosts
+# Maintained by Proofpoint's Emerging Threats team
+# Updated every 12 hours with latest compromised/infected systems
+# Source: Emerging Threats / Proofpoint (https://rules.emergingthreats.net)
 
 [[iplists.sources]]
 name = "Feodo_Tracker"
 url = "https://feodotracker.abuse.ch/downloads/ipblocklist.txt"
 enabled = false
+# Feodo Tracker: Botnet C2 server blocklist
+# Tracks Dridex, Emotet, TrickBot, QakBot, and BazarLoader C2 infrastructure
+# Maintained by abuse.ch - focuses on banking trojans and malware
+# Source: abuse.ch Feodo Tracker (https://feodotracker.abuse.ch)
 
 [[iplists.sources]]
 name = "Spamhaus_DROP"
 url = "https://www.spamhaus.org/drop/drop.txt"
 enabled = false
+# Spamhaus DROP: "Don't Route Or Peer" List
+# Hijacked or leased netblocks used for spam/malware distribution and cybercrime
+# Free advisory list of the most dangerous IP ranges on the Internet
+# Only includes confirmed malicious allocations, not legitimate networks
+# Source: The Spamhaus Project (https://www.spamhaus.org/drop/)
 
 [[iplists.sources]]
 name = "Blocklist-de"
 url = "https://www.blocklist.de/downloads/export-ips_all.txt"
-enabled = false  # likely to overwhelm unifi - could cause "Gateway Configuration Failed" errors
+enabled = false
+# Blocklist.de: Comprehensive attack reporting service
+# Reports IPs attacking via SSH, Mail, FTP, Web, and other services
+# Free voluntary service from fraud/abuse specialists
+# Aggregates real-world attack data from multiple honeypots
+# WARNING: Very large list - may overwhelm UniFi and cause "Gateway Configuration Failed" errors
+# Source: Blocklist.de (https://www.blocklist.de)
 
 [[iplists.sources]]
 name = "CI-Badguys"
 url = "https://cinsscore.com/list/ci-badguys.txt"
-enabled = false  # likely to overwhelm unifi - could cause "Gateway Configuration Failed" errors
+enabled = false
+# CINS Army CI-Badguys: Active threat intelligence from CINS Score
+# IPs with poor Rogue Packet scores or multiple trusted alert triggers
+# Updated hourly from network of Sentinel devices and InfoSec sources
+# Free community threat intelligence feed operating for 10+ years
+# Focuses on active attackers and scanners across all protocols
+# WARNING: Large list - may overwhelm UniFi and cause "Gateway Configuration Failed" errors
+# Source: CINS Score / CINS Army (https://cinsscore.com)
+
+[[iplists.sources]]
+name = "GreenSnow"
+url = "https://blocklist.greensnow.co/greensnow.txt"
+enabled = false
+# GreenSnow: Multi-attack threat intelligence blocklist
+# Monitors port scans, FTP, POP3, IMAP, SMTP, SSH, cPanel attacks, and more
+# Maintained by cybersecurity specialists, comparable to SpamHaus for non-spam attacks
+# Source: GreenSnow (https://greensnow.co)
+
+[[iplists.sources]]
+name = "BinaryDefense_Artillery"
+url = "https://www.binarydefense.com/banlist.txt"
+enabled = false
+# Binary Defense Artillery: Honeypot-based threat intelligence
+# IPs observed attacking Artillery honeypot and monitoring platform
+# Source: Binary Defense Systems (https://www.binarydefense.com)
+
+[[iplists.sources]]
+name = "IPsum_1day"
+url = "https://raw.githubusercontent.com/stamparm/ipsum/master/levels/5.txt"
+enabled = false
+# IPsum Level 5: Aggregated threat intelligence with scoring
+# Combines 30+ public blocklists into single scored feed
+# Level 5 = IPs appearing on 5+ source list (24h lookback)
+# Source: stamparm/ipsum GitHub (https://github.com/stamparm/ipsum)
 
 [[iplists.sources]]
 name = "Cloudflare_Servers"
 url = "https://www.cloudflare.com/ips-v4"
 enabled = false
+# Cloudflare IP Ranges: Official Cloudflare IPv4 address space
+# Use for allowlisting Cloudflare CDN traffic or blocklisting CDN-proxied threats
+# Source: Cloudflare (https://www.cloudflare.com)
 
 [[iplists.sources]]
 name = "AWS_Servers"
 url = "https://ip-ranges.amazonaws.com/ip-ranges.json"
-handler = "AWS"  # Custom JSON parser for AWS IP range format
+handler = "AWS"
 enabled = false
+# Amazon Web Services IP Ranges: Official AWS IPv4 address space
+# Use for allowlisting AWS services or blocking AWS-hosted infrastructure
+# Source: Amazon Web Services (https://aws.amazon.com)
 
 [[iplists.sources]]
 name = "Google_Servers"
 url = "https://www.gstatic.com/ipranges/cloud.json"
-handler = "Google"  # Custom JSON parser for Google Cloud IP range format
+handler = "Google"
 enabled = false
+# Google Cloud Platform IP Ranges: Official GCP IPv4 address space
+# Use for allowlisting Google Cloud services or blocking GCP-hosted infrastructure
+# Source: Google Cloud Platform (https://cloud.google.com)
