@@ -1,0 +1,63 @@
+[mongodb]
+connection_url = "mongodb://127.0.0.1:27117"
+database_name = "ace"  # You shouldnt need to change this 
+
+[application]
+log_level = "info"
+site_name = "default"
+excluded = [
+    "10.0.0.0/8",
+    "172.16.0.0/12",
+    "192.168.0.0/16",
+    "127.0.0.0/8",
+    "169.254.0.0/16",
+    "100.64.0.0/10"
+]
+
+
+[iplists]
+
+[[iplists.sources]]
+name = "Firehol_level1"
+url = "https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level1.netset"
+enabled = true
+
+[[iplists.sources]]
+name = "Firehol_level2"
+url = "https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level2.netset"
+enabled = false
+
+[[iplists.sources]]
+name = "Firehol_level3"
+url = "https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level3.netset"
+enabled = false
+
+[[iplists.sources]]
+name = "Firehol_webserver"
+url = "https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_webserver.netset"
+enabled = false
+
+[[iplists.sources]]
+name = "Tor_Exit_Nodes"
+url = "https://check.torproject.org/torbulkexitlist"
+enabled = false
+
+[[iplists.sources]]
+name = "EmergingThreats_Compromised"
+url = "https://rules.emergingthreats.net/blockrules/compromised-ips.txt"
+enabled = false
+
+[[iplists.sources]]
+name = "Feodo_Tracker"
+url = "https://feodotracker.abuse.ch/downloads/ipblocklist.txt"
+enabled = false
+
+[[iplists.sources]]
+name = "Spamhaus_DROP"
+url = "https://www.spamhaus.org/drop/drop.txt"
+enabled = false
+
+[[iplists.sources]]
+name = "Cloudflare_Servers"
+url = "https://www.cloudflare.com/ips-v4"
+enabled = false
