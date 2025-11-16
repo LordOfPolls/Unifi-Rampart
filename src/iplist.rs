@@ -95,23 +95,13 @@ pub async fn download(url: &str, excluded: &[String]) -> Result<Vec<String>> {
 
     let text = resp.text().await.context("Failed to read response body")?;
 
-    let mut lines: Vec<String> = text.lines().map(|line| line.to_string()).collect();
+    let downloaded_count = text.lines().count();
 
-    lines = lines
-        .iter()
-        .filter(|s| {
-            !s.starts_with("#") && !s.starts_with("//") && !s.starts_with(";") && !s.is_empty()
-        })
-        .cloned()
+    let lines: Vec<String> = text
+        .lines()
+        .map(|line| COMMENT_REGEX.replace_all(line, "").trim().to_string())
+        .filter(|s| !s.is_empty())
         .collect();
-
-
-    lines = lines
-        .iter()
-        .map(|s| COMMENT_REGEX.replace_all(s, "").to_string().trim().to_string())
-        .collect();
-
-    let downloaded_count = lines.len();
 
     let (filtered_lines, excluded_count) = filter_excluded(lines, excluded);
 
