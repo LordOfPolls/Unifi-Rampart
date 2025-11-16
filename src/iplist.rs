@@ -3,8 +3,11 @@ use ipnetwork::IpNetwork;
 use log::{debug, info, warn};
 use regex::Regex;
 use std::net::IpAddr;
+use std::time::Duration;
+use once_cell::sync::Lazy;
 
-const STRIP_COMMENTS_REGEX: &str = r"\s*[;#].*$|\/\/.*$";
+
+static COMMENT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\s*[;#].*$|\/\/.*$").unwrap());
 
 fn parse_ip_or_network(s: &str) -> Option<IpNetwork> {
     // Try parsing as a network first (with CIDR notation)
@@ -75,7 +78,12 @@ fn filter_excluded(ips: Vec<String>, excluded: &[String]) -> (Vec<String>, usize
 pub async fn download(url: &str, excluded: &[String]) -> Result<Vec<String>> {
     debug!("Downloading iplist from {}", url);
 
-    let resp = reqwest::get(url)
+    let r_client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .context("Failed to create reqwest client")?;
+
+    let resp = r_client.get(url).send()
         .await
         .context("Failed to download iplist")?;
 
@@ -97,10 +105,10 @@ pub async fn download(url: &str, excluded: &[String]) -> Result<Vec<String>> {
         .cloned()
         .collect();
 
-    let re = Regex::new(STRIP_COMMENTS_REGEX).unwrap();
+
     lines = lines
         .iter()
-        .map(|s| re.replace_all(s, "").to_string().trim().to_string())
+        .map(|s| COMMENT_REGEX.replace_all(s, "").to_string().trim().to_string())
         .collect();
 
     let downloaded_count = lines.len();

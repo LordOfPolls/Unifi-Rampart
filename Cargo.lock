@@ -13,6 +13,7 @@ dependencies = [
  "ipnetwork",
  "log",
  "mongodb",
+ "once_cell",
  "regex",
  "reqwest",
  "serde",
