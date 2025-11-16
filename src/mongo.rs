@@ -13,7 +13,7 @@ pub struct FirewallGroup {
     pub group_members: Vec<bson::Bson>,
     pub group_type: String,
     pub name: String,
-    pub site_id: String,
+    pub site_id: ObjectId,
 }
 
 pub async fn connect(connection_url: &str) -> Result<Client> {
@@ -59,7 +59,7 @@ pub async fn read_firewall_groups(db: &Database) -> Result<Vec<FirewallGroup>> {
     Ok(groups)
 }
 
-pub async fn get_site_id(db: &Database, site_name: &str) -> Result<String> {
+pub async fn get_site_id(db: &Database, site_name: &str) -> Result<ObjectId> {
     debug!("Retrieving site ID for site: {}", site_name);
     let col: mongodb::Collection<Document> = db.collection("site");
     let filter = doc! { "attr_hidden_id": site_name };
@@ -68,7 +68,7 @@ pub async fn get_site_id(db: &Database, site_name: &str) -> Result<String> {
         && let Some(Bson::ObjectId(oid)) = doc.get("_id") {
             let site_id = oid.to_hex();
             debug!("Found site ID for '{}': {}", site_name, site_id);
-            return Ok(site_id);
+            return Ok(*oid);
         }
 
     error!("Failed to find site '{}' in database", site_name);
