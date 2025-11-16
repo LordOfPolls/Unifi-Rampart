@@ -1,11 +1,12 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Error, Result};
 use ipnetwork::IpNetwork;
 use log::{debug, info, warn};
 use regex::Regex;
 use std::net::IpAddr;
 use std::time::Duration;
 use once_cell::sync::Lazy;
-
+use reqwest::Response;
+use crate::config::IpListSource;
 
 static COMMENT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\s*[;#].*$|\/\/.*$").unwrap());
 
@@ -75,7 +76,8 @@ fn filter_excluded(ips: Vec<String>, excluded: &[String]) -> (Vec<String>, usize
     (filtered, excluded_count)
 }
 
-pub async fn download(url: &str, excluded: &[String]) -> Result<Vec<String>> {
+
+pub async fn download(url: &str) -> Result<Response> {
     debug!("Downloading iplist from {}", url);
 
     let r_client = reqwest::Client::builder()
@@ -92,16 +94,29 @@ pub async fn download(url: &str, excluded: &[String]) -> Result<Vec<String>> {
     }
 
     debug!("Response status: {}", resp.status());
+    Ok(resp)
+}
 
+pub async fn parse(source: &IpListSource, excluded: &[String], resp: Response) -> Result<Result<Vec<String>, Error>, Error> {
     let text = resp.text().await.context("Failed to read response body")?;
+    let url = source.url.clone();
+
+    let lines: Vec<String> = match source.handler.as_deref() {
+        Some("AWS") => {
+            crate::parsers::aws::parse(&text)
+                .context("Failed to parse AWS IP ranges")?
+        },
+        _ => {
+            text
+                .lines()
+                .map(|line| COMMENT_REGEX.replace_all(line, "").trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        }
+    };
+
 
     let downloaded_count = text.lines().count();
-
-    let lines: Vec<String> = text
-        .lines()
-        .map(|line| COMMENT_REGEX.replace_all(line, "").trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect();
 
     let (filtered_lines, excluded_count) = filter_excluded(lines, excluded);
 
@@ -116,5 +131,5 @@ pub async fn download(url: &str, excluded: &[String]) -> Result<Vec<String>> {
         filtered_lines.len()
     );
 
-    Ok(filtered_lines)
+    Ok(Ok(filtered_lines))
 }

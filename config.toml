@@ -73,3 +73,9 @@ enabled = false
 name = "Cloudflare_Servers"
 url = "https://www.cloudflare.com/ips-v4"
 enabled = false
+
+[[iplists.sources]]
+name = "AWS_Servers"
+url = "https://ip-ranges.amazonaws.com/ip-ranges.json"
+handler = "AWS"
+enabled = false

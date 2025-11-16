@@ -1,6 +1,7 @@
 mod config;
 mod iplist;
 mod mongo;
+mod parsers;
 
 use anyhow::Context;
 use log::{error, info, warn};
@@ -55,12 +56,16 @@ async fn main() -> anyhow::Result<()> {
     for source in cfg.iplists.sources.iter().filter(|s| s.enabled) {
         info!("Processing iplist: {}", source.name);
 
-        let ips = iplist::download(&source.url, &cfg.application.excluded)
+        let resp = iplist::download(&source.url)
             .await
             .context(format!("Failed to download iplist '{}'", source.name))?;
 
+        let ips = iplist::parse(&source, &cfg.application.excluded, resp)
+            .await
+            .context("Failed to parse iplist")?;
+
         if !cfg.application.dry_run {
-            mongo::upsert_iplist(&db, &source.name, ips, &cfg.application.site_name)
+            mongo::upsert_iplist(&db, &source.name, ips?, &cfg.application.site_name)
                 .await
                 .context(format!("Failed to upsert iplist '{}'", source.name))?;
         }else{

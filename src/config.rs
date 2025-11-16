@@ -25,6 +25,7 @@ pub struct IpListSource {
     pub name: String,
     pub url: String,
     pub enabled: bool,
+    pub handler: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
