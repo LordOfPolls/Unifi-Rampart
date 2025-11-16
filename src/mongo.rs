@@ -24,10 +24,16 @@ pub async fn connect(connection_url: &str) -> Result<Client> {
 
     let client = Client::with_options(client_options).context("Failed to create MongoDB client")?;
 
-    let r = client.database("admin").run_command(doc! {"ping": 1}, None).await;
+    let r = client
+        .database("admin")
+        .run_command(doc! {"ping": 1}, None)
+        .await;
 
     if r.is_err() {
-        error!("Failed to connect to MongoDB. Is your ssh tunnel running?\n{}", r.clone().unwrap_err());
+        error!(
+            "Failed to connect to MongoDB. Is your ssh tunnel running?\n{}",
+            r.clone().unwrap_err()
+        );
         #[allow(clippy::unnecessary_unwrap)]
         return Err(r.unwrap_err().into());
     }
@@ -65,11 +71,12 @@ pub async fn get_site_id(db: &Database, site_name: &str) -> Result<ObjectId> {
     let filter = doc! { "attr_hidden_id": site_name };
 
     if let Some(doc) = col.find_one(filter, None).await?
-        && let Some(Bson::ObjectId(oid)) = doc.get("_id") {
-            let site_id = oid.to_hex();
-            debug!("Found site ID for '{}': {}", site_name, site_id);
-            return Ok(*oid);
-        }
+        && let Some(Bson::ObjectId(oid)) = doc.get("_id")
+    {
+        let site_id = oid.to_hex();
+        debug!("Found site ID for '{}': {}", site_name, site_id);
+        return Ok(*oid);
+    }
 
     error!("Failed to find site '{}' in database", site_name);
     Err(anyhow::anyhow!("Failed to find site '{}'", site_name))
@@ -92,15 +99,15 @@ pub async fn upsert_iplist(
         let site_id = get_site_id(db, site_name).await?;
 
         let update = doc! {
-              "$setOnInsert": {
-                  "name": group_name,
-                  "group_type": "address-group",
-                  "site_id": site_id
-              },
-              "$set": {
-                  "group_members": iplist
-              }
-          };
+            "$setOnInsert": {
+                "name": group_name,
+                "group_type": "address-group",
+                "site_id": site_id
+            },
+            "$set": {
+                "group_members": iplist
+            }
+        };
 
         let options = mongodb::options::UpdateOptions::builder()
             .upsert(true)
@@ -112,14 +119,13 @@ pub async fn upsert_iplist(
 
         info!("Created and updated firewall group '{}'", group_name);
     } else {
-        info!("Updating existing firewall group '{}' with {} IP addresses",
-                group_name, iplist.len());
+        info!(
+            "Updating existing firewall group '{}' with {} IP addresses",
+            group_name,
+            iplist.len()
+        );
 
-        col.update_one(
-            filter,
-            doc! {"$set": {"group_members": iplist}},
-            None
-        )
+        col.update_one(filter, doc! {"$set": {"group_members": iplist}}, None)
             .await
             .context("Failed to update firewall group")?;
 

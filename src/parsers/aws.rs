@@ -12,10 +12,11 @@ struct AwsPrefix {
 }
 
 pub fn parse(text: &str) -> Result<Vec<String>> {
-    let aws_ranges: AwsIpRanges = serde_json::from_str(text)
-        .context("Failed to parse AWS IP ranges JSON")?;
+    let aws_ranges: AwsIpRanges =
+        serde_json::from_str(text).context("Failed to parse AWS IP ranges JSON")?;
 
-    let ips: Vec<String> = aws_ranges.prefixes
+    let ips: Vec<String> = aws_ranges
+        .prefixes
         .into_iter()
         .map(|prefix| prefix.ip_prefix)
         .collect();

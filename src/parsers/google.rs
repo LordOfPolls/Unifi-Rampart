@@ -13,10 +13,11 @@ struct GooglePrefix {
 }
 
 pub fn parse(text: &str) -> Result<Vec<String>> {
-    let google_ranges: GoogleIpRanges = serde_json::from_str(text)
-        .context("Failed to parse Google Cloud IP ranges JSON")?;
+    let google_ranges: GoogleIpRanges =
+        serde_json::from_str(text).context("Failed to parse Google Cloud IP ranges JSON")?;
 
-    let ips: Vec<String> = google_ranges.prefixes
+    let ips: Vec<String> = google_ranges
+        .prefixes
         .into_iter()
         .filter_map(|prefix| prefix.ipv4_prefix)
         .collect();

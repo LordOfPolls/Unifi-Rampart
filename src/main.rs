@@ -10,15 +10,13 @@ use log::{error, info, warn};
 async fn main() -> anyhow::Result<()> {
     let cfg = config::load().context("Failed to load configuration")?;
 
-    let log_level = cfg.application.log_level
-        .parse()
-        .unwrap_or_else(|_| {
-            eprintln!(
-                "Warning: Invalid log level '{}' in config, defaulting to 'info'",
-                cfg.application.log_level
-            );
-            log::LevelFilter::Info
-        });
+    let log_level = cfg.application.log_level.parse().unwrap_or_else(|_| {
+        eprintln!(
+            "Warning: Invalid log level '{}' in config, defaulting to 'info'",
+            cfg.application.log_level
+        );
+        log::LevelFilter::Info
+    });
 
     env_logger::Builder::from_default_env()
         .filter_level(log_level)
@@ -34,9 +32,11 @@ async fn main() -> anyhow::Result<()> {
         if !source.url.starts_with("https") {
             if cfg.application.allow_insecure_requests {
                 warn!("IP list source {} is not using HTTPS.", source.name);
-            }
-            else{
-                error!("IP list source {} is not using HTTPS. Aborting!", source.name);
+            } else {
+                error!(
+                    "IP list source {} is not using HTTPS. Aborting!",
+                    source.name
+                );
                 return Ok(());
             }
         }
@@ -68,7 +68,7 @@ async fn main() -> anyhow::Result<()> {
             mongo::upsert_iplist(&db, &source.name, ips?, &cfg.application.site_name)
                 .await
                 .context(format!("Failed to upsert iplist '{}'", source.name))?;
-        }else{
+        } else {
             info!("Dry run enabled, not updating database");
 
             info!("IP list: {:?}", ips);

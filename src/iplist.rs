@@ -1,12 +1,12 @@
+use crate::config::IpListSource;
 use anyhow::{Context, Error, Result};
 use ipnetwork::IpNetwork;
 use log::{debug, info, warn};
+use once_cell::sync::Lazy;
 use regex::Regex;
+use reqwest::Response;
 use std::net::IpAddr;
 use std::time::Duration;
-use once_cell::sync::Lazy;
-use reqwest::Response;
-use crate::config::IpListSource;
 
 static COMMENT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\s*[;#].*$|\/\/.*$").unwrap());
 
@@ -76,7 +76,6 @@ fn filter_excluded(ips: Vec<String>, excluded: &[String]) -> (Vec<String>, usize
     (filtered, excluded_count)
 }
 
-
 pub async fn download(url: &str) -> Result<Response> {
     debug!("Downloading iplist from {}", url);
 
@@ -85,47 +84,53 @@ pub async fn download(url: &str) -> Result<Response> {
         .build()
         .context("Failed to create reqwest client")?;
 
-    let resp = r_client.get(url).send()
+    let resp = r_client
+        .get(url)
+        .send()
         .await
         .context("Failed to download iplist")?;
 
     if resp.status() != 200 {
-        return Err(anyhow::anyhow!("Failed to download iplist: {}", resp.status()));
+        return Err(anyhow::anyhow!(
+            "Failed to download iplist: {}",
+            resp.status()
+        ));
     }
 
     debug!("Response status: {}", resp.status());
     Ok(resp)
 }
 
-pub async fn parse(source: &IpListSource, excluded: &[String], resp: Response) -> Result<Result<Vec<String>, Error>, Error> {
+pub async fn parse(
+    source: &IpListSource,
+    excluded: &[String],
+    resp: Response,
+) -> Result<Result<Vec<String>, Error>, Error> {
     let text = resp.text().await.context("Failed to read response body")?;
     let url = source.url.clone();
 
     let lines: Vec<String> = match source.handler.as_deref() {
         Some("AWS") => {
-            crate::parsers::aws::parse(&text)
-                .context("Failed to parse AWS IP ranges")?
-        },
-        Some("Google") => {
-            crate::parsers::google::parse(&text)
-                .context("Failed to parse Google Cloud IP ranges")?
+            crate::parsers::aws::parse(&text).context("Failed to parse AWS IP ranges")?
         }
-        _ => {
-            text
-                .lines()
-                .map(|line| COMMENT_REGEX.replace_all(line, "").trim().to_string())
-                .filter(|s| !s.is_empty())
-                .collect()
-        }
+        Some("Google") => crate::parsers::google::parse(&text)
+            .context("Failed to parse Google Cloud IP ranges")?,
+        _ => text
+            .lines()
+            .map(|line| COMMENT_REGEX.replace_all(line, "").trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect(),
     };
-
 
     let downloaded_count = text.lines().count();
 
     let (filtered_lines, excluded_count) = filter_excluded(lines, excluded);
 
     if filtered_lines.is_empty() {
-        warn!("No IP addresses found in {}. This is probably fine, but check your exclusion rules.", url);
+        warn!(
+            "No IP addresses found in {}. This is probably fine, but check your exclusion rules.",
+            url
+        );
     }
 
     info!(
