@@ -9,11 +9,15 @@ use log::{error, info, warn};
 async fn main() -> anyhow::Result<()> {
     let cfg = config::load().context("Failed to load configuration")?;
 
-    let log_level = cfg
-        .application
-        .log_level
+    let log_level = cfg.application.log_level
         .parse()
-        .unwrap_or(log::LevelFilter::Info);
+        .unwrap_or_else(|_| {
+            eprintln!(
+                "Warning: Invalid log level '{}' in config, defaulting to 'info'",
+                cfg.application.log_level
+            );
+            log::LevelFilter::Info
+        });
 
     env_logger::Builder::from_default_env()
         .filter_level(log_level)
