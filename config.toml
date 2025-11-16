@@ -1,15 +1,15 @@
 [mongodb]
-connection_url = "mongodb://127.0.0.1:27117"
+connection_url = "mongodb://127.0.0.1:27117"  # MongoDB connection string for UniFi Controller (default port 27117)
 database_name = "ace"  # You shouldnt need to change this 
 
 [application]
-log_level = "debug"
-site_name = "default"
-allow_insecure_requests = false
-max_items_in_list = 10_000
-split_on_max_items = false
-dry_run = false
-excluded = [
+log_level = "info"  # Logging verbosity level (trace, debug, info, warn, error)
+site_name = "default"  # UniFi site name to update (use "default" for the main site)
+allow_insecure_requests = false  # Allow HTTP downloads without SSL verification
+max_items_in_list = 10_000  # Maximum number of IPs per firewall group to prevent UniFi overload
+split_on_max_items = false  # Automatically split large IP lists into multiple firewall groups
+dry_run = false  # Test mode that downloads lists but doesn't write to the database
+excluded = [  # IP ranges to exclude from downloaded blocklists
     "10.0.0.0/8",
     "172.16.0.0/12",
     "192.168.0.0/16",
@@ -22,9 +22,9 @@ excluded = [
 [iplists]
 
 [[iplists.sources]]
-name = "Firehol_level1"
-url = "https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level1.netset"
-enabled = false
+name = "Firehol_level1"  # Firewall group name in UniFi Controller
+url = "https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level1.netset"  # URL to download the IP blocklist from
+enabled = false  # Whether to download and sync this IP list
 
 [[iplists.sources]]
 name = "Firehol_level2"
@@ -79,11 +79,11 @@ enabled = false
 [[iplists.sources]]
 name = "AWS_Servers"
 url = "https://ip-ranges.amazonaws.com/ip-ranges.json"
-handler = "AWS"
+handler = "AWS"  # Custom JSON parser for AWS IP range format
 enabled = false
 
 [[iplists.sources]]
 name = "Google_Servers"
 url = "https://www.gstatic.com/ipranges/cloud.json"
-handler = "Google"
+handler = "Google"  # Custom JSON parser for Google Cloud IP range format
 enabled = false
