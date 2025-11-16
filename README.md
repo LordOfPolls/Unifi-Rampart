@@ -6,6 +6,9 @@ Downloads IP blocklists from Spamhaus, Firehol, abuse.ch, and other sources, the
 This tool does **not** create firewall rules, it only creates ip groups that you can use in your own firewall rules.
 This is not a substitue for proper cybersecurity, use it as an augmentation. 
 
+<img width="389" height="512" alt="image" src="https://github.com/user-attachments/assets/60a5531b-e33c-4993-b9a0-0651e34a6203" />
+
+
 ## Disclaimer
 > I am not responsible for any damages caused by this software. Use at your own risk.
 > 
