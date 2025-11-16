@@ -3,7 +3,7 @@ mod iplist;
 mod mongo;
 
 use anyhow::Context;
-use log::{info, warn};
+use log::{error, info, warn};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -24,6 +24,18 @@ async fn main() -> anyhow::Result<()> {
     let client = mongo::connect(&cfg.mongodb.connection_url)
         .await
         .context("Failed to connect to MongoDB")?;
+
+    for source in cfg.iplists.sources.iter().filter(|s| s.enabled) {
+        if !source.url.starts_with("https") {
+            if cfg.application.allow_insecure_requests {
+                warn!("IP list source {} is not using HTTPS.", source.name);
+            }
+            else{
+                error!("IP list source {} is not using HTTPS. Aborting!", source.name);
+                return Ok(());
+            }
+        }
+    }
 
     let db = client.database(&cfg.mongodb.database_name);
 

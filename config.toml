@@ -5,6 +5,7 @@ database_name = "ace"  # You shouldnt need to change this
 [application]
 log_level = "info"
 site_name = "default"
+allow_insecure_requests = false
 dry_run = false
 excluded = [
     "10.0.0.0/8",

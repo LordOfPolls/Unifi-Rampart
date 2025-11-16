@@ -33,6 +33,7 @@ pub struct ApplicationConfig {
     pub site_name: String,
     pub excluded: Vec<String>,
     pub dry_run: bool,
+    pub allow_insecure_requests: bool,
 }
 
 pub fn load() -> Result<Config> {
