@@ -58,6 +58,16 @@ url = "https://www.spamhaus.org/drop/drop.txt"
 enabled = false
 
 [[iplists.sources]]
+name = "Blocklist-de"
+url = "https://www.blocklist.de/downloads/export-ips_all.txt"
+enabled = false
+
+[[iplists.sources]]
+name = "CI-Badguys"
+url = "https://cinsscore.com/list/ci-badguys.txt"
+enabled = false
+
+[[iplists.sources]]
 name = "Cloudflare_Servers"
 url = "https://www.cloudflare.com/ips-v4"
 enabled = false
