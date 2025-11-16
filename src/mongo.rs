@@ -28,6 +28,7 @@ pub async fn connect(connection_url: &str) -> Result<Client> {
 
     if r.is_err() {
         error!("Failed to connect to MongoDB. Is your ssh tunnel running?\n{}", r.clone().unwrap_err());
+        #[allow(clippy::unnecessary_unwrap)]
         return Err(r.unwrap_err().into());
     }
 
@@ -63,13 +64,12 @@ pub async fn get_site_id(db: &Database, site_name: &str) -> Result<String> {
     let col: mongodb::Collection<Document> = db.collection("site");
     let filter = doc! { "attr_hidden_id": site_name };
 
-    if let Some(doc) = col.find_one(filter, None).await? {
-        if let Some(Bson::ObjectId(oid)) = doc.get("_id") {
+    if let Some(doc) = col.find_one(filter, None).await?
+        && let Some(Bson::ObjectId(oid)) = doc.get("_id") {
             let site_id = oid.to_hex();
             debug!("Found site ID for '{}': {}", site_name, site_id);
             return Ok(site_id);
         }
-    }
 
     error!("Failed to find site '{}' in database", site_name);
     Err(anyhow::anyhow!("Failed to find site '{}'", site_name))
@@ -90,7 +90,7 @@ pub async fn upsert_iplist(
             "Firewall group '{}' not found, creating new group",
             group_name
         );
-        let site_id = get_site_id(&db, site_name).await?;
+        let site_id = get_site_id(db, site_name).await?;
 
         col.insert_one(
             doc! {
