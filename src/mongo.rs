@@ -24,6 +24,13 @@ pub async fn connect(connection_url: &str) -> Result<Client> {
 
     let client = Client::with_options(client_options).context("Failed to create MongoDB client")?;
 
+    let r = client.database("admin").run_command(doc! {"ping": 1}, None).await;
+
+    if r.is_err() {
+        error!("Failed to connect to MongoDB. Is your ssh tunnel running?\n{}", r.clone().unwrap_err());
+        return Err(r.unwrap_err().into());
+    }
+
     info!("Successfully connected to MongoDB");
     Ok(client)
 }
