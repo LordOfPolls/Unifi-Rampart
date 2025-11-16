@@ -102,7 +102,7 @@ pub async fn upsert_iplist(
             "$setOnInsert": {
                 "name": group_name,
                 "group_type": "address-group",
-                "site_id": site_id
+                "site_id": site_id.to_string()
             },
             "$set": {
                 "group_members": iplist
