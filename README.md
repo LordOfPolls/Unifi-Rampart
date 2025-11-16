@@ -21,6 +21,37 @@ cd unifi-rampart
 cargo build --release
 ```
 
+### Building for your Unifi gateway (ARM64)
+
+This project can be built to run directly on your controller; however, you'll probably need to cross-compile for ARM64 architecture. 
+I've had success using `cross`:
+
+```bash
+# Install cross (one-time setup)
+cargo install cross
+
+cross build --release --target aarch64-unknown-linux-musl
+# The binary should be at: target/aarch64-unknown-linux-musl/release/unifi-rampart
+```
+
+Deploy to your gateway:
+```bash
+# Copy binary and config to your gateway
+scp target/aarch64-unknown-linux-musl/release/unifi-rampart root@<udm-ip>:/data/custom/unifi-rampart
+scp config.toml root@<udm-ip>:/root/data/custom/unifi-rampart
+
+# SSH in and run
+ssh root@<udm-ip>
+cd /root
+./unifi-rampart
+```
+
+From here you can set up a cron job to fire it at regular intervals.
+
+**Note**: When running on the UDM itself, use `mongodb://127.0.0.1:27117` in your `config.toml` since MongoDB is local.
+
+### Running from Another Machine
+
 You'll need access to your UniFi Controller's MongoDB instance, this means you will need to be able to SSH into the controller.
 
 Rampart can either be run on the appliance itself, or another machine with access to the controller's MongoDB.
