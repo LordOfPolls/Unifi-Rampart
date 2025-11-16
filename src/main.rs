@@ -43,9 +43,15 @@ async fn main() -> anyhow::Result<()> {
             .await
             .context(format!("Failed to download iplist '{}'", source.name))?;
 
-        mongo::upsert_iplist(&db, &source.name, ips, &cfg.application.site_name)
-            .await
-            .context(format!("Failed to upsert iplist '{}'", source.name))?;
+        if !cfg.application.dry_run {
+            mongo::upsert_iplist(&db, &source.name, ips, &cfg.application.site_name)
+                .await
+                .context(format!("Failed to upsert iplist '{}'", source.name))?;
+        }else{
+            info!("Dry run enabled, not updating database");
+
+            info!("IP list: {:?}", ips);
+        }
     }
 
     info!("Application completed successfully");

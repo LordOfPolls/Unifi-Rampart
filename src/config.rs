@@ -32,6 +32,7 @@ pub struct ApplicationConfig {
     pub log_level: String,
     pub site_name: String,
     pub excluded: Vec<String>,
+    pub dry_run: bool,
 }
 
 pub fn load() -> Result<Config> {
