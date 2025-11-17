@@ -48,10 +48,8 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("Failed to read firewall groups")?;
 
-    if firewall_groups.is_empty() {
-        warn!("No firewall groups found in database. This doesn't seem right... Exiting.");
-        return Ok(());
-    }
+    info!("Found {} firewall groups", firewall_groups.len());
+    info!("Firewall groups: {:?}", firewall_groups.iter().map(|g| g.name.clone()).collect::<Vec<_>>());
 
     for source in cfg.iplists.sources.iter().filter(|s| s.enabled) {
         info!("Processing iplist: {}", source.name);
