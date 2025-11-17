@@ -1,20 +1,36 @@
 # UniFi-Rampart
 
-Automated threat intelligence feeds for UniFi firewall groups. 
-Downloads IP blocklists from Spamhaus, Firehol, abuse.ch, and other sources, then syncs them directly into your UniFi Controller's MongoDB. Run it on a schedule and stop manually updating blocklists.
+<p align="center">
+  <strong>Automated threat intelligence feeds for UniFi firewalls</strong>
+</p>
 
-This tool does **not** create firewall rules, it only creates ip groups that you can use in your own firewall rules.
-This is not a substitue for proper cybersecurity, use it as an augmentation. 
+<p align="center">
+  <img width="389" height="512" alt="UniFi-Rampart Dashboard" src="https://github.com/user-attachments/assets/60a5531b-e33c-4993-b9a0-0651e34a6203" />
+</p>
 
-<img width="389" height="512" alt="image" src="https://github.com/user-attachments/assets/60a5531b-e33c-4993-b9a0-0651e34a6203" />
+Downloads and syncs curated IP blocklists from Spamhaus DROP, Firehol, Emerging Threats, Feodo Tracker, and abuse.ch directly into your UniFi Controller's firewall groups.
+
+Written in Rust for performance and reliability.
+
+Run it on a schedule and stop manually updating blocklists.
+
+> [!Note]
+> This tool does **not** create firewall rules, it only creates IP groups that you can use in your own firewall rules.
+> This is not a substitute for proper cybersecurity - use it as an augmentation.
+
+---
 
 
 ## Disclaimer
+
+> [!CAUTION]
 > I am not responsible for any damages caused by this software. Use at your own risk.
 > 
 > If you bring down your entire network, that's your problem.
 > 
 > I have tested this extensively on my own hardware, but it's not guaranteed to work on yours. **Test it on a non-production controller first.**
+
+---
 
 ## Installation
 
@@ -24,46 +40,45 @@ cd unifi-rampart
 cargo build --release
 ```
 
-### Building for your Unifi gateway (ARM64)
+### Building for UniFi Gateway (ARM64)
 
-This project can be built to run directly on your controller; however, you'll probably need to cross-compile for ARM64 architecture. 
-I've had success using `cross`:
-
+> [!TIP]
+> To run directly on your UDM/UDR, you'll need to cross-compile for ARM64 architecture.
 ```bash
 # Install cross (one-time setup)
 cargo install cross
 
+# Build for ARM64
 cross build --release --target aarch64-unknown-linux-musl
-# The binary should be at: target/aarch64-unknown-linux-musl/release/unifi-rampart
 ```
 
-Deploy to your gateway:
+The binary will be at: `target/aarch64-unknown-linux-musl/release/unifi-rampart`
+
+**Deploy to your gateway:**
 ```bash
 # Copy binary and config to your gateway
-scp target/aarch64-unknown-linux-musl/release/unifi-rampart root@<udm-ip>:/data/custom/unifi-rampart
-scp config.toml root@<udm-ip>:/root/data/custom/unifi-rampart
+scp target/aarch64-unknown-linux-musl/release/unifi-rampart root@:/data/custom/unifi-rampart
+scp config.toml root@:/data/custom/unifi-rampart
 
 # SSH in and run
-ssh root@<udm-ip>
-cd /root
+ssh root@
+cd /data/custom/unifi-rampart
 ./unifi-rampart
 ```
 
 From here you can set up a cron job to fire it at regular intervals.
 
-**Note**: When running on the UDM itself, use `mongodb://127.0.0.1:27117` in your `config.toml` since MongoDB is local.
+> [!NOTE]
+> When running on the UDM itself, use `mongodb://127.0.0.1:27117` in your `config.toml` since MongoDB is local.
 
 ### Running from Another Machine
 
-You'll need access to your UniFi Controller's MongoDB instance, this means you will need to be able to SSH into the controller.
-
-Rampart can either be run on the appliance itself, or another machine with access to the controller's MongoDB.
-
-You can achieve the latter by using ssh tunneling:
-```bash 
+You can run Rampart on any machine with network access to your controller's MongoDB using SSH tunneling:
+```bash
 ssh -L 27117:127.0.0.1:27117 root@[controller-ip]
 ```
 
+Then configure `config.toml` to use `mongodb://127.0.0.1:27117`.
 
 ## Configuration
 
@@ -74,21 +89,17 @@ The most important is probably `excluded` list; as this is your safety net; IPs 
 You probably don't want to block your own private networks.
 
 ## Running It
-
 ```bash
 cargo run --release
 ```
 
-Each enabled source becomes a firewall group in your UniFi Controller (check **Settings → Firewall & Security → Groups**). 
+**What happens:**
+1. Connects to MongoDB
+2. Downloads IP lists from enabled sources
+3. Filters out junk and excluded networks
+4. Creates/updates firewall groups in UniFi Controller
 
-The tool connects to MongoDB, downloads the ip-lists, filters out junk and excluded networks, then upserts the IP lists ~~ If a firewall group doesn't exist, it creates it. If it exists, it updates it.
-
-For automation, use cron or systemd. Daily updates are typical, however some sources update hourly.
-For home use, a daily cron job is fine:
-```bash
-# Cron: Daily at 2 AM
-0 2 * * * cd /path/to/unifi-rampart && cargo run --release >> /var/log/unifi-rampart.log 2>&1
-```
+Each enabled source becomes a firewall group visible in **Settings → Policy Engine → Zones**
 
 ## Threat Intelligence Sources
 
@@ -102,58 +113,93 @@ The included config has several common feeds, but you can add any publicly acces
 - **Tor Exit Nodes**: Block Tor if your threat model requires it, but understand what you're blocking.
 - **Cloudflare Servers**: Don't use these as a blocklist, instead use them as a whitelist for your webservers.
 
-Firehol level3 and similar aggressive feeds can exceed 100,000 IPs. 
+Aggressive feeds like Firehol Level3 can exceed 100,000 IPs and may overwhelm your controller.
 Test on non-production controllers first to avoid bringing your controller to its knees.
 
+---
 
-## Common Questions
+## FAQ
 
-### My console says `Gateway Configuration Failed`
-One of the firewall groups you've enabled is too large for your controller.
-Reduce the number of IPs in each group, or disable the feed.
+<details>
+<summary><strong> My console says "Gateway Configuration Failed"</strong></summary>
 
-Unifi will refuse to load a config if there is a list that is too large, even if it isn't used in any rules. 
-You will need to manually delete the offending groups from the controller.
-Run this command in ssh to get the ID of the offending group, you
+Likely, one of the firewall groups you've enabled is too large for your controller.
+
+**Solution:**
+1. Reduce the number of IPs in each group, or disable the feed
+2. Manually delete the offending groups from the controller
+
+> [!WARNING]
+> UniFi will refuse to load a config if there's a list that's too large, even if it isn't used in any rules.
+
+Find the offending group:
 ```bash
 sudo cat /usr/lib/unifi/logs/server.log | grep -E "ERROR|WARN" | grep -v "trafficFlow"
 ```
-Use the IDs shown in the error messages to delete the groups, and disable the corresponding feeds in the config.
 
-I am trying to find out what the maximum size of a firewall group is, but haven't found it yet ~~ I think its around 10k.
+Use the IDs shown in the error messages to delete the groups, then disable the corresponding feeds in config.
 
-### Will this break existing firewall rules?
+> [!NOTE]
+> The maximum size of a firewall group appears to be around 10,000 IPs (still investigating exact limits).
 
-No. The tool only creates or updates firewall ip groups. Your existing rules stay untouched. The groups appear like any other address group in your controller.
+</details>
+
+<details>
+<summary><strong>Will this break existing firewall rules?</strong></summary>
+
+**No.** The tool only creates or updates firewall IP groups. Your existing rules stay untouched. The groups appear like any other address group in your controller.
+If you have a rule that depends on these groups, it will pick up the changes without issue.
+
 You are expected to use these groups in your own firewall rules.
 
+</details>
 
-### What happens if a blocklist source is down?
+<details>
+<summary><strong>What happens if a blocklist source is down?</strong></summary>
 
 The tool logs the error and continues processing other sources. One failed feed won't block the entire sync.
 
+</details>
 
-### Can I use this with UniFi Dream Machine / Cloud Key / Cloud-hosted controllers?
+<details>
+<summary><strong>Can I use this with UDM/Cloud Key/Cloud-hosted controllers?</strong></summary>
 
-I have only tested this on UDM Pro and SE, but it should work on other UniFi devices.
+I have only tested this on UDM Pro and SE, but it should work on other UniFi devices that expose MongoDB access.
 
+</details>
 
-### How do I actually use these firewall groups in rules?
+<details>
+<summary><strong>How do I actually use these firewall groups in rules?</strong></summary>
 
-In your UniFi Controller: **Settings → Firewall & Security → LAN → Create Rule**. Set the source or destination to the firewall group name (e.g., `Firehol_level1`), then configure your block/reject action.
+1. Go to **Settings → Policy Engine → Zones**
+2. Create a new rule
+3. Set the mode to IP, then list (out of the list, Any, IP, MAC, Region)
+4. Choose your desired group
+5. Configure your block/reject action
+6. Save and apply
 
+</details>
 
-### Should I enable all the feeds?
+<details>
+<summary><strong>Should I enable all the feeds?</strong></summary>
 
-No. 
+**No.**
 
-Start with conservative feeds (Firehol level1, Spamhaus DROP) and monitor for false positives. Adding every feed is how you accidentally block legitimate services. Tor exit nodes, for example, are only malicious if your threat model says so.
+Start with conservative feeds (Firehol Level1, Spamhaus DROP) and monitor for false positives. Adding every feed is how you accidentally block legitimate services.
 
+> [!TIP]
+> Tor exit nodes, for example, are only malicious if your threat model requires blocking them.
 
-### Multiple sites?
+</details>
 
-Change the `site_name` in config.toml to match your site (visible in the UniFi URL: `/manage/site/your_site_name`).
+<details>
+<summary><strong>Multiple sites?</strong></summary>
 
-Note, I have not tested this with multiple sites - Here be dragons.
+Change the `site_name` in `config.toml` to match your site (visible in the UniFi URL: `/manage/site/your_site_name`).
+
+I have not tested this with multiple sites - Here be dragons.
+
+</details>
+
 
 
