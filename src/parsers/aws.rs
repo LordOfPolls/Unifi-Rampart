@@ -23,3 +23,26 @@ pub fn parse(text: &str) -> Result<Vec<String>> {
 
     Ok(ips)
 }
+
+#[tokio::test]
+async fn test_e2e_aws_json() {
+    use crate::config::IpListSource;
+    use crate::iplist;
+
+    let source = IpListSource {
+        name: "AWS_Servers".to_string(),
+        url: "https://ip-ranges.amazonaws.com/ip-ranges.json".to_string(),
+        enabled: true,
+        handler: Some("AWS".to_string()),
+    };
+
+    let resp = iplist::download(&source.url)
+        .await
+        .expect("Failed to download");
+    let result = iplist::parse(&source, &[], resp)
+        .await
+        .expect("Failed to parse");
+    let ips = result.expect("Parsing returned error");
+
+    assert!(!ips.is_empty());
+}

@@ -8,9 +8,9 @@ use reqwest::Response;
 use std::net::IpAddr;
 use std::time::Duration;
 
-static COMMENT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\s*[;#].*$|\/\/.*$").unwrap());
+pub static COMMENT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\s*[;#].*$|\/\/.*$").unwrap());
 
-fn parse_ip_or_network(s: &str) -> Option<IpNetwork> {
+pub fn parse_ip_or_network(s: &str) -> Option<IpNetwork> {
     // Try parsing as a network first (with CIDR notation)
     if let Ok(network) = s.parse::<IpNetwork>() {
         return Some(network);
@@ -25,7 +25,7 @@ fn parse_ip_or_network(s: &str) -> Option<IpNetwork> {
 }
 
 /// Check if an IP or network should be excluded based on exclusion rules
-fn should_exclude(entry: &str, exclusion_networks: &[IpNetwork]) -> bool {
+pub fn should_exclude(entry: &str, exclusion_networks: &[IpNetwork]) -> bool {
     let parsed = match parse_ip_or_network(entry.trim()) {
         Some(network) => network,
         None => {
@@ -52,7 +52,7 @@ fn should_exclude(entry: &str, exclusion_networks: &[IpNetwork]) -> bool {
     false
 }
 
-fn filter_excluded(ips: Vec<String>, excluded: &[String]) -> (Vec<String>, usize) {
+pub fn filter_excluded(ips: Vec<String>, excluded: &[String]) -> (Vec<String>, usize) {
     let exclusion_networks: Vec<IpNetwork> = excluded
         .iter()
         .filter_map(|s| parse_ip_or_network(s))

@@ -40,8 +40,13 @@ pub struct ApplicationConfig {
 }
 
 pub fn load() -> Result<Config> {
+    load_from_path("config")
+}
+
+#[doc(hidden)] // Internal function for testing
+pub fn load_from_path(path: &str) -> Result<Config> {
     let config = ConfigBuilder::builder()
-        .add_source(config::File::with_name("config"))
+        .add_source(config::File::with_name(path))
         .build()
         .context("Failed to load config.toml")?;
 
