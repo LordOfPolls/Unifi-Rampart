@@ -29,6 +29,8 @@ Run it on a schedule and stop manually updating blocklists.
 > If you bring down your entire network, that's your problem.
 > 
 > I have tested this extensively on my own hardware, but it's not guaranteed to work on yours. **Test it on a non-production controller first.**
+>
+> Use common-sense, create backups, and test before applying to production! 
 
 ---
 
@@ -106,7 +108,7 @@ Each enabled source becomes a firewall group visible in **Settings → Policy En
 The included config has several common feeds, but you can add any publicly accessible IP lists. Each source creates a firewall group with the specified `name`.
 
 **Common sources:**
-- **Firehol level1/2/3**: Aggregated threat feeds. Level1 is conservative (~10k IPs), level3 is aggressive (100k+ IPs). Start with level1.
+- **Firehol level1/2/3**: Aggregated threat feeds. Level1 is conservative, level2 and 3 are aggressive (100k+ IPs). Start with level1.
 - **Spamhaus DROP/EDROP**: Known spam and hijacked networks. Low false positive rate, widely trusted.
 - **Emerging Threats Compromised IPs**: Active botnet nodes and compromised hosts.
 - **Feodo Tracker**: Banking trojan C2 infrastructure (abuse.ch project).
@@ -138,9 +140,11 @@ sudo cat /usr/lib/unifi/logs/server.log | grep -E "ERROR|WARN" | grep -v "traffi
 ```
 
 Use the IDs shown in the error messages to delete the groups, then disable the corresponding feeds in config.
+You will need to connect to your unifi's database, with a mongo client of your choice, and delete it from the ace//firewall_group colleciton. 
 
 > [!NOTE]
-> The maximum size of a firewall group appears to be around 10,000 IPs (still investigating exact limits).
+> The maximum size of a firewall group appears to be around 10,000 IPs
+> If you try and sync a list larger than this, your controller will refuse to load the config until you manually remove it. 
 
 </details>
 
