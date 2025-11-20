@@ -87,7 +87,8 @@ async fn main() -> anyhow::Result<()> {
                 for (i, chunk) in split_ips.enumerate(){
                     if cfg.application.dry_run {
                         info!("Dry run enabled, not updating database");
-                        info!("IP list: {:?}", chunk);
+                        info!("This would have inserted {} IPs into your database", chunk.len()  + 1);
+                        info!("---")
                     }else{
                         mongo::upsert_iplist(&db, &format!("{}_{}", source.name, i), chunk.to_vec(), &cfg.application.site_name)
                             .await
