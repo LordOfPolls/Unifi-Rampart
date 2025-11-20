@@ -150,8 +150,8 @@ async fn op_normal(cfg: &Config, db: &Database) -> anyhow::Result<()> {
                 .context(format!("Failed to upsert iplist '{}'", source.name))?;
         } else {
             info!("Dry run enabled, not updating database");
-
-            info!("IP list: {:?}", ips);
+            info!("This would have inserted {} IPs into your database", ips.len()  + 1);
+            info!("---")
         }
     }
     Ok(())
