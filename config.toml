@@ -6,7 +6,7 @@ database_name = "ace"  # You shouldnt need to change this
 log_level = "info"  # Logging verbosity level (trace, debug, info, warn, error)
 site_name = "default"  # UniFi site name to update (use "default" for the main site)
 allow_insecure_requests = false  # Allow HTTP downloads without SSL verification
-max_items_in_list = 10_000  # Maximum number of IPs per firewall group to prevent UniFi overload
+max_items_in_list = 10_000  # Maximum number of IPs per firewall group to prevent UniFi overload. I stongly advise not changing this. 
 split_on_max_items = false  # Automatically split large IP lists into multiple firewall groups
 dry_run = false  # Test mode that downloads lists but doesn't write to the database
 excluded = [  # IP ranges to exclude from downloaded blocklists
@@ -27,24 +27,6 @@ url = "https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_
 enabled = false
 # FireHOL Level 1: Maximum protection with minimum false positives
 # Aggregated IP list providing baseline protection against known threats
-# Source: FireHOL blocklist-ipsets project (https://iplists.firehol.org)
-
-[[iplists.sources]]
-name = "Firehol_level2"
-url = "https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level2.netset"
-enabled = false
-# FireHOL Level 2: More aggressive blocking than Level 1
-# Larger aggregated blocklist with increased coverage but potentially more false positives
-# WARNING: Large list size may overwhelm UniFi and cause "Gateway Configuration Failed" errors
-# Source: FireHOL blocklist-ipsets project (https://iplists.firehol.org)
-
-[[iplists.sources]]
-name = "Firehol_level3"
-url = "https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level3.netset"
-enabled = false
-# FireHOL Level 3: Most aggressive blocking with maximum coverage
-# Very large aggregated blocklist - highest protection but increased risk of false positives
-# WARNING: Large list size may overwhelm UniFi and cause "Gateway Configuration Failed" errors
 # Source: FireHOL blocklist-ipsets project (https://iplists.firehol.org)
 
 [[iplists.sources]]
@@ -93,29 +75,6 @@ enabled = false
 # Source: The Spamhaus Project (https://www.spamhaus.org/drop/)
 
 [[iplists.sources]]
-name = "Blocklist-de"
-url = "https://www.blocklist.de/downloads/export-ips_all.txt"
-enabled = false
-# Blocklist.de: Comprehensive attack reporting service
-# Reports IPs attacking via SSH, Mail, FTP, Web, and other services
-# Free voluntary service from fraud/abuse specialists
-# Aggregates real-world attack data from multiple honeypots
-# WARNING: Very large list - may overwhelm UniFi and cause "Gateway Configuration Failed" errors
-# Source: Blocklist.de (https://www.blocklist.de)
-
-[[iplists.sources]]
-name = "CI-Badguys"
-url = "https://cinsscore.com/list/ci-badguys.txt"
-enabled = false
-# CINS Army CI-Badguys: Active threat intelligence from CINS Score
-# IPs with poor Rogue Packet scores or multiple trusted alert triggers
-# Updated hourly from network of Sentinel devices and InfoSec sources
-# Free community threat intelligence feed operating for 10+ years
-# Focuses on active attackers and scanners across all protocols
-# WARNING: Large list - may overwhelm UniFi and cause "Gateway Configuration Failed" errors
-# Source: CINS Score / CINS Army (https://cinsscore.com)
-
-[[iplists.sources]]
 name = "GreenSnow"
 url = "https://blocklist.greensnow.co/greensnow.txt"
 enabled = false
@@ -140,6 +99,10 @@ enabled = false
 # Combines 30+ public blocklists into single scored feed
 # Level 5 = IPs appearing on 5+ source list (24h lookback)
 # Source: stamparm/ipsum GitHub (https://github.com/stamparm/ipsum)
+
+
+
+###### Whitelist options, i dont reocommend blocking the following 3 ######
 
 [[iplists.sources]]
 name = "Cloudflare_Servers"
@@ -166,3 +129,48 @@ enabled = false
 # Google Cloud Platform IP Ranges: Official GCP IPv4 address space
 # Use for allowlisting Google Cloud services or blocking GCP-hosted infrastructure
 # Source: Google Cloud Platform (https://cloud.google.com)
+
+
+
+###### These lists have a high chance of soft-locking your config, use with caution, and a backup ######
+
+[[iplists.sources]]
+name = "Firehol_level2"
+url = "https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level2.netset"
+enabled = false
+# FireHOL Level 2: More aggressive blocking than Level 1
+# Larger aggregated blocklist with increased coverage but potentially more false positives
+# WARNING: Large list size may overwhelm UniFi and cause "Gateway Configuration Failed" errors
+# Source: FireHOL blocklist-ipsets project (https://iplists.firehol.org)
+
+[[iplists.sources]]
+name = "Firehol_level3"
+url = "https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level3.netset"
+enabled = false
+# FireHOL Level 3: Most aggressive blocking with maximum coverage
+# Very large aggregated blocklist - highest protection but increased risk of false positives
+# WARNING: Large list size may overwhelm UniFi and cause "Gateway Configuration Failed" errors
+# Source: FireHOL blocklist-ipsets project (https://iplists.firehol.org)
+
+[[iplists.sources]]
+name = "Blocklist-de"
+url = "https://www.blocklist.de/downloads/export-ips_all.txt"
+enabled = false
+# Blocklist.de: Comprehensive attack reporting service
+# Reports IPs attacking via SSH, Mail, FTP, Web, and other services
+# Free voluntary service from fraud/abuse specialists
+# Aggregates real-world attack data from multiple honeypots
+# WARNING: Very large list - may overwhelm UniFi and cause "Gateway Configuration Failed" errors
+# Source: Blocklist.de (https://www.blocklist.de)
+
+[[iplists.sources]]
+name = "CI-Badguys"
+url = "https://cinsscore.com/list/ci-badguys.txt"
+enabled = false
+# CINS Army CI-Badguys: Active threat intelligence from CINS Score
+# IPs with poor Rogue Packet scores or multiple trusted alert triggers
+# Updated hourly from network of Sentinel devices and InfoSec sources
+# Free community threat intelligence feed operating for 10+ years
+# Focuses on active attackers and scanners across all protocols
+# WARNING: Large list - may overwhelm UniFi and cause "Gateway Configuration Failed" errors
+# Source: CINS Score / CINS Army (https://cinsscore.com)
