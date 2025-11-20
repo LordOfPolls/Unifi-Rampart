@@ -134,3 +134,15 @@ pub async fn upsert_iplist(
 
     Ok(())
 }
+
+pub async fn delete_all_firewall_groups(db: &Database) -> Result<u64> {
+    info!("Deleting all firewall groups");
+    let col: mongodb::Collection<Document> = db.collection("firewallgroup");
+
+    let result = col.delete_many(doc! {}, None)
+        .await
+        .context("Failed to delete firewall groups")?;
+
+    info!("Deleted {} firewall group(s)", result.deleted_count);
+    Ok(result.deleted_count)
+}

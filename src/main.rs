@@ -154,7 +154,34 @@ async fn op_normal(cfg: &Config, db: &Database) -> anyhow::Result<()> {
             info!("IP list: {:?}", ips);
         }
     }
-
-    info!("Application completed successfully");
     Ok(())
+}
+
+
+
+async fn op_clean(db: &Database) -> anyhow::Result<()> {
+    info!("Clean mode activated");
+
+    println!("\n\nWARNING: This will delete ALL firewall groups from the database.\
+            \nThis operation cannot be undone, and may result in broken firewall rules on your UniFi controller.");
+    println!("Are you sure you want to continue? (yes/no): ");
+
+    let mut input = String::new();
+    std::io::stdin()
+        .read_line(&mut input)
+        .context("Failed to read user input")?;
+
+    let input = input.trim().to_lowercase();
+
+    if input == "yes" || input == "y" {
+        let deleted_count = mongo::delete_all_firewall_groups(&db)
+            .await
+            .context("Failed to delete firewall groups")?;
+
+        info!("Successfully deleted {} firewall group(s)", deleted_count);
+        Ok(())
+    } else {
+        info!("Clean operation cancelled by user");
+        Ok(())
+    }
 }
