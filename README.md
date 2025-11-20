@@ -91,6 +91,8 @@ The most important is probably `excluded` list; as this is your safety net; IPs 
 You probably don't want to block your own private networks.
 
 ## Running It
+
+### Basic Usage
 ```bash
 cargo run --release
 ```
@@ -102,6 +104,24 @@ cargo run --release
 4. Creates/updates firewall groups in UniFi Controller
 
 Each enabled source becomes a firewall group visible in **Settings → Policy Engine → Zones**
+
+### Command-Line Options
+
+**Dry Run Mode:**
+```bash
+cargo run --release -- --dry-run
+```
+Overrides your config and runs in dry-run mode.
+Simulates the sync without making any database changes. Use this to preview what would be updated before applying changes to production.
+
+**Clean Mode:**
+```bash
+cargo run --release -- --clean
+```
+Deletes all firewall groups from the controller, should only be used as a last resort.
+
+> [!CAUTION]
+> This operation cannot be undone and may break existing firewall rules that reference these groups.
 
 ## Threat Intelligence Sources
 
@@ -129,7 +149,7 @@ Likely, one of the firewall groups you've enabled is too large for your controll
 
 **Solution:**
 1. Reduce the number of IPs in each group, or disable the feed
-2. Manually delete the offending groups from the controller
+2. Delete the offending groups from the controller
 
 > [!WARNING]
 > UniFi will refuse to load a config if there's a list that's too large, even if it isn't used in any rules.
@@ -139,11 +159,17 @@ Find the offending group:
 sudo cat /usr/lib/unifi/logs/server.log | grep -E "ERROR|WARN" | grep -v "trafficFlow"
 ```
 
-Use the IDs shown in the error messages to delete the groups, then disable the corresponding feeds in config.
-You will need to connect to your unifi's database, with a mongo client of your choice, and delete it from the ace//firewall_group colleciton. 
+**Option 1 - Use clean mode (easiest):**
+```bash
+cargo run --release -- --clean
+```
+This will delete all firewall groups. After cleaning, disable the problematic feed in `config.toml` before syncing again.
+
+**Option 2 - Manual deletion:**
+Connect to your UniFi's database with a mongo client and delete the specific groups from the `ace/firewall_group` collection using the IDs from the error messages. 
 
 > [!NOTE]
-> The maximum size of a firewall group appears to be around 10,000 IPs
+> The maximum size of a firewall group appears to be around 10,000 IPs (educated guess)
 > If you try and sync a list larger than this, your controller will refuse to load the config until you manually remove it. 
 
 </details>
