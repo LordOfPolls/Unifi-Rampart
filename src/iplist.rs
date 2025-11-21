@@ -92,7 +92,8 @@ pub async fn download(url: &str) -> Result<Response> {
 
     if resp.status() != 200 {
         return Err(anyhow::anyhow!(
-            "Failed to download iplist: {}",
+            "Failed to download iplist from {}: {}",
+            url,
             resp.status()
         ));
     }
