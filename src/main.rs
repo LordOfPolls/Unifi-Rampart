@@ -1,13 +1,8 @@
-mod config;
-mod iplist;
-mod mongo;
-mod parsers;
-
 use anyhow::Context;
 use clap::Parser;
 use log::{error, info, warn};
 use mongodb::Database;
-use crate::config::Config;
+use unifi_rampart::{config, iplist, mongo};
 
 #[derive(Parser, Debug)]
 #[command(name = "unifi-rampart")]
@@ -72,7 +67,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn sanity_check(cfg: &Config) -> Result<(), String> {
+fn sanity_check(cfg: &config::Config) -> Result<(), String> {
     if cfg.application.max_items_in_list == 0 {
         error!("max_items_in_list must be greater than 0");
         return Err("max_items_in_list must be greater than 0".to_string());
@@ -114,7 +109,7 @@ fn check_delta(before: &[String], after: &[String]) -> bool {
     added > 0 || removed > 0
 }
 
-async fn op_normal(cfg: &Config, db: &Database) -> anyhow::Result<()> {
+async fn op_normal(cfg: &config::Config, db: &Database) -> anyhow::Result<()> {
     let firewall_groups = mongo::read_firewall_groups(db)
         .await
         .context("Failed to read firewall groups")?;

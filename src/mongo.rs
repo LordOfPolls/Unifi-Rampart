@@ -3,29 +3,8 @@ use futures_util::TryStreamExt;
 use log::{debug, error, info};
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{Bson, Document, doc};
-use mongodb::{Client, Database, bson, options::ClientOptions};
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct FirewallGroup {
-    #[serde(rename = "_id")]
-    pub id: ObjectId,
-    pub group_members: Vec<bson::Bson>,
-    pub group_type: String,
-    pub name: String,
-    pub site_id: ObjectId,
-}
-
-impl FirewallGroup {
-    pub fn get_ip_list(&self) -> Vec<String> {
-        let out: Result<Vec<String>, anyhow::Error> = self.group_members.iter().map(|ip| ip.as_str().map(String::from).context("Failed to convert IP to string")).collect();
-
-        if let Ok(out) = out {
-            return out;
-        }
-        Vec::new()
-    }
-}
+use mongodb::{Client, Database, options::ClientOptions};
+use crate::models::unifi::FirewallGroup;
 
 pub async fn connect(connection_url: &str) -> Result<Client> {
     info!("Connecting to MongoDB at {}", connection_url);
