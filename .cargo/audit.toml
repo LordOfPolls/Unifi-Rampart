@@ -1,0 +1,21 @@
+[advisories]
+ignore = [
+    "RUSTSEC-2024-0421",
+    "RUSTSEC-2024-0388",
+]
+
+# RUSTSEC-2024-0421: idna vulnerability via trust-dns-proto 0.21.2
+# -----------------------------------------------------------------
+# mongodb 2.8.x depends on trust-dns-proto which uses vulnerable idna 0.2.3
+#
+# Cannot fix because:
+#   - UniFi Network Application uses MongoDB 3.4 (wire version 6) -- mongodb 2.8 is the latest version to support this
+#   - dns-resolver feature only became optional in mongodb 3.0+
+#
+# This should not be an issue as config.toml is admin controlled, and this app does not take connection strings dynamically
+#
+# Will be resolved when UniFi Network Application supports MongoDB 4.2+
+#
+# RUSTSEC-2024-0388: derivative unmaintained
+# -------------------------------------------
+# Same constraint as above
