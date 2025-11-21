@@ -101,15 +101,17 @@ fn sanity_check(cfg: &Config) -> Result<(), String> {
     Ok(())
 }
 
-fn log_delta(before: &[String], after: &[String]) {
+fn check_delta(before: &[String], after: &[String]) -> bool {
     if before.is_empty() {
         info!("New List - Contains {} IPs", after.len());
-        return;
+        return true;
     }
 
     let added = after.iter().filter(|ip| !before.contains(ip)).count();
     let removed = before.iter().filter(|ip| !after.contains(ip)).count();
     info!("+{} Added, -{} Removed (total {} -> {})", added, removed, before.len(), after.len());
+
+    added > 0 || removed > 0
 }
 
 async fn op_normal(cfg: &Config, db: &Database) -> anyhow::Result<()> {
@@ -148,7 +150,12 @@ async fn op_normal(cfg: &Config, db: &Database) -> anyhow::Result<()> {
 
         let ips = ips?;
 
-        log_delta(&before_ips, &ips);
+        let changed = check_delta(&before_ips, &ips);
+
+        if !changed {
+            info!("No changes detected in iplist '{}'", source.name);
+            continue;
+        }
 
         if ips.len() > cfg.application.max_items_in_list {
             if !cfg.application.split_on_max_items {
