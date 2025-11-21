@@ -15,7 +15,15 @@ pub struct FirewallGroup {
 
 impl FirewallGroup {
     pub fn get_ip_list(&self) -> Vec<String> {
-        let out: Result<Vec<String>, anyhow::Error> = self.group_members.iter().map(|ip| ip.as_str().map(String::from).context("Failed to convert IP to string")).collect();
+        let out: Result<Vec<String>, anyhow::Error> = self
+            .group_members
+            .iter()
+            .map(|ip| {
+                ip.as_str()
+                    .map(String::from)
+                    .context("Failed to convert IP to string")
+            })
+            .collect();
 
         if let Ok(out) = out {
             return out;

@@ -1,5 +1,5 @@
-use unifi_rampart::iplist::{COMMENT_REGEX, filter_excluded, parse_ip_or_network, should_exclude};
 use ipnetwork::IpNetwork;
+use unifi_rampart::iplist::{COMMENT_REGEX, filter_excluded, parse_ip_or_network, should_exclude};
 #[test]
 fn test_parse_ip_or_network_single_ipv4() {
     let result = parse_ip_or_network("192.168.1.1");

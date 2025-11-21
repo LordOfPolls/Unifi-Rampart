@@ -1,10 +1,10 @@
+use crate::models::unifi::FirewallGroup;
 use anyhow::{Context, Result};
 use futures_util::TryStreamExt;
 use log::{debug, error, info};
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{Bson, Document, doc};
 use mongodb::{Client, Database, options::ClientOptions};
-use crate::models::unifi::FirewallGroup;
 
 pub async fn connect(connection_url: &str) -> Result<Client> {
     info!("Connecting to MongoDB at {}", connection_url);
@@ -129,7 +129,8 @@ pub async fn delete_all_firewall_groups(db: &Database) -> Result<u64> {
     info!("Deleting all firewall groups");
     let col: mongodb::Collection<Document> = db.collection("firewallgroup");
 
-    let result = col.delete_many(doc! {}, None)
+    let result = col
+        .delete_many(doc! {}, None)
         .await
         .context("Failed to delete firewall groups")?;
 

@@ -48,7 +48,10 @@ async fn main() -> anyhow::Result<()> {
 
     let check = sanity_check(&cfg);
     if check.is_err() {
-        error!("Aborting due to configuration errors: {}", check.unwrap_err());
+        error!(
+            "Aborting due to configuration errors: {}",
+            check.unwrap_err()
+        );
         return Ok(());
     }
 
@@ -58,8 +61,7 @@ async fn main() -> anyhow::Result<()> {
             return Ok(());
         }
         op_clean(&db).await?;
-    }
-    else{
+    } else {
         op_normal(&cfg, &db).await?;
     }
 
@@ -75,8 +77,14 @@ fn sanity_check(cfg: &config::Config) -> Result<(), String> {
 
     for excluded_entry in &cfg.application.excluded {
         if iplist::parse_ip_or_network(excluded_entry).is_none() {
-            error!("Invalid IP address or network in exclusion list: {}", excluded_entry);
-            return Err(format!("Invalid IP address or network in exclusion list: {}", excluded_entry));
+            error!(
+                "Invalid IP address or network in exclusion list: {}",
+                excluded_entry
+            );
+            return Err(format!(
+                "Invalid IP address or network in exclusion list: {}",
+                excluded_entry
+            ));
         }
     }
 
@@ -89,7 +97,10 @@ fn sanity_check(cfg: &config::Config) -> Result<(), String> {
                     "IP list source {} is not using HTTPS. Aborting!",
                     source.name
                 );
-                return Err(format!("IP list source {} is not using HTTPS.", source.name));
+                return Err(format!(
+                    "IP list source {} is not using HTTPS.",
+                    source.name
+                ));
             }
         }
     }
@@ -104,7 +115,13 @@ fn check_delta(before: &[String], after: &[String]) -> bool {
 
     let added = after.iter().filter(|ip| !before.contains(ip)).count();
     let removed = before.iter().filter(|ip| !after.contains(ip)).count();
-    info!("+{} Added, -{} Removed (total {} -> {})", added, removed, before.len(), after.len());
+    info!(
+        "+{} Added, -{} Removed (total {} -> {})",
+        added,
+        removed,
+        before.len(),
+        after.len()
+    );
 
     added > 0 || removed > 0
 }
@@ -115,7 +132,13 @@ async fn op_normal(cfg: &config::Config, db: &Database) -> anyhow::Result<()> {
         .context("Failed to read firewall groups")?;
 
     info!("Found {} firewall groups", firewall_groups.len());
-    info!("Firewall groups: {:?}", firewall_groups.iter().map(|g| g.name.clone()).collect::<Vec<_>>());
+    info!(
+        "Firewall groups: {:?}",
+        firewall_groups
+            .iter()
+            .map(|g| g.name.clone())
+            .collect::<Vec<_>>()
+    );
 
     for source in cfg.iplists.sources.iter().filter(|s| s.enabled) {
         info!("Processing iplist: {}", source.name);
@@ -125,7 +148,7 @@ async fn op_normal(cfg: &config::Config, db: &Database) -> anyhow::Result<()> {
 
         if let Some(g) = group {
             let _ips = g.get_ip_list();
-            if !_ips.is_empty(){
+            if !_ips.is_empty() {
                 before_ips = _ips;
             }
         }
@@ -155,15 +178,18 @@ async fn op_normal(cfg: &config::Config, db: &Database) -> anyhow::Result<()> {
         if ips.len() > cfg.application.max_items_in_list {
             if !cfg.application.split_on_max_items {
                 warn!(
-                "IP list '{}' exceeds max items limit of {}, skipping",
-                source.name, cfg.application.max_items_in_list
-            );
+                    "IP list '{}' exceeds max items limit of {}, skipping",
+                    source.name, cfg.application.max_items_in_list
+                );
                 continue;
             } else {
                 // there are more than max items in the list, split it into multiple lists, and upsert each of them
                 // todo: if a list shrinks later, we should remove it from the database
                 // question would then be how to handle for any firewall groups that reference it...
-                warn!("IP list '{}' exceeds max items limit of {}, splitting into multiple lists", source.name, cfg.application.max_items_in_list);
+                warn!(
+                    "IP list '{}' exceeds max items limit of {}, splitting into multiple lists",
+                    source.name, cfg.application.max_items_in_list
+                );
                 let split_ips = ips.chunks(cfg.application.max_items_in_list - 1);
 
                 for (i, chunk) in split_ips.enumerate() {
@@ -171,9 +197,14 @@ async fn op_normal(cfg: &config::Config, db: &Database) -> anyhow::Result<()> {
                         info!("Dry run enabled, not updating database");
                         info!("---")
                     } else {
-                        mongo::upsert_iplist(db, &format!("{}_{}", source.name, i), chunk.to_vec(), &cfg.application.site_name)
-                            .await
-                            .context(format!("Failed to upsert iplist '{}'", source.name))?;
+                        mongo::upsert_iplist(
+                            db,
+                            &format!("{}_{}", source.name, i),
+                            chunk.to_vec(),
+                            &cfg.application.site_name,
+                        )
+                        .await
+                        .context(format!("Failed to upsert iplist '{}'", source.name))?;
                     }
                 }
                 continue;
@@ -194,8 +225,10 @@ async fn op_normal(cfg: &config::Config, db: &Database) -> anyhow::Result<()> {
 async fn op_clean(db: &Database) -> anyhow::Result<()> {
     info!("Clean mode activated");
 
-    println!("\n\nWARNING: This will delete ALL firewall groups from the database.\
-            \nThis operation cannot be undone, and may result in broken firewall rules on your UniFi controller.");
+    println!(
+        "\n\nWARNING: This will delete ALL firewall groups from the database.\
+            \nThis operation cannot be undone, and may result in broken firewall rules on your UniFi controller."
+    );
     println!("Are you sure you want to continue? (yes/no): ");
 
     let mut input = String::new();

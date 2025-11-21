@@ -4,8 +4,8 @@ use unifi_rampart::mongo;
 #[tokio::test]
 #[ignore]
 async fn test_delete_all_firewall_groups() {
-    let connection_url = std::env::var("MONGODB_URL")
-        .unwrap_or_else(|_| "mongodb://localhost:27018".to_string());
+    let connection_url =
+        std::env::var("MONGODB_URL").unwrap_or_else(|_| "mongodb://localhost:27018".to_string());
 
     let client = mongo::connect(&connection_url)
         .await
