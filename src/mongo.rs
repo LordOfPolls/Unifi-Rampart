@@ -16,6 +16,17 @@ pub struct FirewallGroup {
     pub site_id: ObjectId,
 }
 
+impl FirewallGroup {
+    pub fn get_ip_list(&self) -> Vec<String> {
+        let out: Result<Vec<String>, anyhow::Error> = self.group_members.iter().map(|ip| ip.as_str().map(String::from).context("Failed to convert IP to string")).collect();
+
+        if let Ok(out) = out {
+            return out;
+        }
+        Vec::new()
+    }
+}
+
 pub async fn connect(connection_url: &str) -> Result<Client> {
     info!("Connecting to MongoDB at {}", connection_url);
     let client_options = ClientOptions::parse(connection_url)

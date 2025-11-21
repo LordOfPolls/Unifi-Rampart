@@ -89,6 +89,17 @@ fn sanity_check(cfg: &Config) -> Result<(), String> {
     Ok(())
 }
 
+fn log_delta(before: &[String], after: &[String]) {
+    if before.is_empty() {
+        info!("New List - Contains {} IPs", after.len());
+        return;
+    }
+
+    let added = after.iter().filter(|ip| !before.contains(ip)).count();
+    let removed = before.iter().filter(|ip| !after.contains(ip)).count();
+    info!("+{} Added, -{} Removed (total {} -> {})", added, removed, before.len(), after.len());
+}
+
 async fn op_normal(cfg: &Config, db: &Database) -> anyhow::Result<()> {
     let firewall_groups = mongo::read_firewall_groups(db)
         .await
@@ -99,6 +110,16 @@ async fn op_normal(cfg: &Config, db: &Database) -> anyhow::Result<()> {
 
     for source in cfg.iplists.sources.iter().filter(|s| s.enabled) {
         info!("Processing iplist: {}", source.name);
+
+        let group = firewall_groups.iter().find(|g| g.name == source.name);
+        let mut before_ips: Vec<String> = Vec::new();
+
+        if let Some(g) = group {
+            let _ips = g.get_ip_list();
+            if !_ips.is_empty(){
+                before_ips = _ips;
+            }
+        }
 
         let resp = iplist::download(&source.url)
             .await
@@ -114,6 +135,8 @@ async fn op_normal(cfg: &Config, db: &Database) -> anyhow::Result<()> {
         }
 
         let ips = ips?;
+
+        log_delta(&before_ips, &ips);
 
         if ips.len() > cfg.application.max_items_in_list {
             if !cfg.application.split_on_max_items {
@@ -132,10 +155,9 @@ async fn op_normal(cfg: &Config, db: &Database) -> anyhow::Result<()> {
                 for (i, chunk) in split_ips.enumerate() {
                     if cfg.application.dry_run {
                         info!("Dry run enabled, not updating database");
-                        info!("This would have inserted {} IPs into your database", chunk.len()  + 1);
                         info!("---")
                     } else {
-                        mongo::upsert_iplist(&db, &format!("{}_{}", source.name, i), chunk.to_vec(), &cfg.application.site_name)
+                        mongo::upsert_iplist(db, &format!("{}_{}", source.name, i), chunk.to_vec(), &cfg.application.site_name)
                             .await
                             .context(format!("Failed to upsert iplist '{}'", source.name))?;
                     }
@@ -145,20 +167,16 @@ async fn op_normal(cfg: &Config, db: &Database) -> anyhow::Result<()> {
         }
 
         if !cfg.application.dry_run {
-            mongo::upsert_iplist(&db, &source.name, ips, &cfg.application.site_name)
+            mongo::upsert_iplist(db, &source.name, ips, &cfg.application.site_name)
                 .await
                 .context(format!("Failed to upsert iplist '{}'", source.name))?;
         } else {
             info!("Dry run enabled, not updating database");
-            info!("This would have inserted {} IPs into your database", ips.len()  + 1);
             info!("---")
         }
     }
     Ok(())
 }
-
-
-
 async fn op_clean(db: &Database) -> anyhow::Result<()> {
     info!("Clean mode activated");
 
@@ -174,7 +192,7 @@ async fn op_clean(db: &Database) -> anyhow::Result<()> {
     let input = input.trim().to_lowercase();
 
     if input == "yes" || input == "y" {
-        let deleted_count = mongo::delete_all_firewall_groups(&db)
+        let deleted_count = mongo::delete_all_firewall_groups(db)
             .await
             .context("Failed to delete firewall groups")?;
 
