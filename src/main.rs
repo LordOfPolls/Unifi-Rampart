@@ -73,6 +73,18 @@ async fn main() -> anyhow::Result<()> {
 }
 
 fn sanity_check(cfg: &Config) -> Result<(), String> {
+    if cfg.application.max_items_in_list == 0 {
+        error!("max_items_in_list must be greater than 0");
+        return Err("max_items_in_list must be greater than 0".to_string());
+    }
+
+    for excluded_entry in &cfg.application.excluded {
+        if iplist::parse_ip_or_network(excluded_entry).is_none() {
+            error!("Invalid IP address or network in exclusion list: {}", excluded_entry);
+            return Err(format!("Invalid IP address or network in exclusion list: {}", excluded_entry));
+        }
+    }
+
     for source in cfg.iplists.sources.iter().filter(|s| s.enabled) {
         if !source.url.starts_with("https") {
             if cfg.application.allow_insecure_requests {
