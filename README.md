@@ -7,7 +7,14 @@
 <p align="center">
   <img width="389" height="512" alt="UniFi-Rampart Dashboard" src="https://github.com/user-attachments/assets/60a5531b-e33c-4993-b9a0-0651e34a6203" />
 </p>
-
+<p align="center">
+  <a href="https://github.com/lordofpolls/unifi-rampart/actions/workflows/rust.yml">
+    <img src="https://github.com/lordofpolls/unifi-rampart/actions/workflows/rust.yml/badge.svg" alt="CI Status">
+  </a>
+  <a href="https://github.com/lordofpolls/unifi-rampart/blob/master/LICENSE">
+    <img src="https://img.shields.io/github/license/lordofpolls/unifi-rampart" alt="License">
+  </a>
+</p>
 Downloads and syncs curated IP blocklists from Spamhaus DROP, Firehol, Emerging Threats, Feodo Tracker, and abuse.ch directly into your UniFi Controller's firewall groups.
 
 Written in Rust for performance and reliability.
