@@ -1,8 +1,7 @@
 use anyhow::Context;
 use clap::Parser;
 use log::{error, info, warn};
-use mongodb::Database;
-use unifi_rampart::{config, iplist, mongo};
+use unifi_rampart::{config, iplist, unifi_api};
 
 #[derive(Parser, Debug)]
 #[command(name = "unifi-rampart")]
@@ -40,17 +39,18 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Starting Unifi-Rampart");
 
-    let client = mongo::connect(&cfg.mongodb.connection_url)
-        .await
-        .context("Failed to connect to MongoDB")?;
+    let client = unifi_api::UnifiClient::new(&cfg.controller)
+        .context("Failed to build UniFi API client")?;
 
-    let db = client.database(&cfg.mongodb.database_name);
+    client.login().await.context(
+        "Failed to log in to UniFi controller. Check your controller URL/credentials/API key.",
+    )?;
 
     let check = sanity_check(&cfg);
-    if check.is_err() {
+    if let Err(e) = check {
         error!(
             "Aborting due to configuration errors: {}",
-            check.unwrap_err()
+            e
         );
         return Ok(());
     }
@@ -60,9 +60,9 @@ async fn main() -> anyhow::Result<()> {
             error!("Clean mode cannot be used in dry-run mode");
             return Ok(());
         }
-        op_clean(&db).await?;
+        op_clean(&client).await?;
     } else {
-        op_normal(&cfg, &db).await?;
+        op_normal(&cfg, &client).await?;
     }
 
     info!("Application completed successfully");
@@ -126,8 +126,9 @@ fn check_delta(before: &[String], after: &[String]) -> bool {
     added > 0 || removed > 0
 }
 
-async fn op_normal(cfg: &config::Config, db: &Database) -> anyhow::Result<()> {
-    let firewall_groups = mongo::read_firewall_groups(db)
+async fn op_normal(cfg: &config::Config, client: &unifi_api::UnifiClient) -> anyhow::Result<()> {
+    let firewall_groups = client
+        .read_firewall_groups()
         .await
         .context("Failed to read firewall groups")?;
 
@@ -197,14 +198,13 @@ async fn op_normal(cfg: &config::Config, db: &Database) -> anyhow::Result<()> {
                         info!("Dry run enabled, not updating database");
                         info!("---")
                     } else {
-                        mongo::upsert_iplist(
-                            db,
-                            &format!("{}_{}", source.name, i),
-                            chunk.to_vec(),
-                            &cfg.application.site_name,
-                        )
-                        .await
-                        .context(format!("Failed to upsert iplist '{}'", source.name))?;
+                        let chunk_name = format!("{}_{}", source.name, i);
+                        let existing_chunk =
+                            firewall_groups.iter().find(|g| g.name == chunk_name);
+                        client
+                            .upsert_iplist(&chunk_name, chunk.to_vec(), existing_chunk)
+                            .await
+                            .context(format!("Failed to upsert iplist '{}'", chunk_name))?;
                     }
                 }
                 continue;
@@ -212,7 +212,8 @@ async fn op_normal(cfg: &config::Config, db: &Database) -> anyhow::Result<()> {
         }
 
         if !cfg.application.dry_run {
-            mongo::upsert_iplist(db, &source.name, ips, &cfg.application.site_name)
+            client
+                .upsert_iplist(&source.name, ips, group)
                 .await
                 .context(format!("Failed to upsert iplist '{}'", source.name))?;
         } else {
@@ -222,7 +223,7 @@ async fn op_normal(cfg: &config::Config, db: &Database) -> anyhow::Result<()> {
     }
     Ok(())
 }
-async fn op_clean(db: &Database) -> anyhow::Result<()> {
+async fn op_clean(client: &unifi_api::UnifiClient) -> anyhow::Result<()> {
     info!("Clean mode activated");
 
     println!(
@@ -239,7 +240,8 @@ async fn op_clean(db: &Database) -> anyhow::Result<()> {
     let input = input.trim().to_lowercase();
 
     if input == "yes" || input == "y" {
-        let deleted_count = mongo::delete_all_firewall_groups(db)
+        let deleted_count = client
+            .delete_all_firewall_groups()
             .await
             .context("Failed to delete firewall groups")?;
 

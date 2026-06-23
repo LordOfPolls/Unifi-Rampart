@@ -4,15 +4,30 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
-    pub mongodb: MongoConfig,
+    pub controller: ControllerConfig,
     pub iplists: IpListsConfig,
     pub application: ApplicationConfig,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct MongoConfig {
-    pub connection_url: String,
-    pub database_name: String,
+pub struct ControllerConfig {
+    /// Base URL of the controller, e.g. "https://192.168.1.1" (trailing slash is normalized away).
+    pub url: String,
+    /// Site shortname, e.g. "default".
+    pub site: String,
+    /// true = UniFi OS `/proxy/network` prefix, false = classic self-hosted `:8443` style.
+    #[serde(default = "default_true")]
+    pub is_unifi_os: bool,
+    /// false = accept self-signed certs (common for local controllers).
+    #[serde(default = "default_true")]
+    pub verify_tls: bool,
+    pub api_key: Option<String>,
+    pub username: Option<String>,
+    pub password: Option<String>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Deserialize)]
@@ -31,7 +46,6 @@ pub struct IpListSource {
 #[derive(Debug, Deserialize)]
 pub struct ApplicationConfig {
     pub log_level: String,
-    pub site_name: String,
     pub excluded: Vec<String>,
     pub max_items_in_list: usize,
     pub split_on_max_items: bool,

@@ -78,20 +78,22 @@ cd /data/custom/unifi-rampart
 From here you can set up a cron job to fire it at regular intervals.
 
 > [!NOTE]
-> When running on the UDM itself, use `mongodb://127.0.0.1:27117` in your `config.toml` since MongoDB is local.
+> When running on the gateway itself, set `url = "https://127.0.0.1"` and `verify_tls = false` in your `config.toml`. No SSH tunnel is needed - this is a normal HTTPS API call, not a raw MongoDB protocol connection.
 
 ### Running from Another Machine
 
-You can run Rampart on any machine with network access to your controller's MongoDB using SSH tunneling:
-```bash
-ssh -L 27117:127.0.0.1:27117 root@[controller-ip]
-```
+You can run Rampart on any machine with network access to your controller over HTTPS. Just point `url` in `config.toml` at the controller's real address (e.g. `https://192.168.1.1`), keeping `verify_tls = false` if it uses a self-signed certificate.
 
-Then configure `config.toml` to use `mongodb://127.0.0.1:27117`.
+### Getting API Credentials
+
+You need either an API key or a username/password pair (not both):
+
+- **API key (recommended, UDM/UniFi OS controllers)**: Generate a local API key from the controller's UI, under Settings > Control Plane > Integrations (the exact path varies by firmware version). Set it as `api_key` in `config.toml`.
+- **Username/password (classic self-hosted controllers)**: Create a local admin account and set `username`/`password` in `config.toml`. Disable 2FA on this account - this flow does not handle 2FA challenges.
 
 ## Configuration
 
-There is a config.toml file in the root directory. Edit it to match your environment.
+Copy `config.example.toml` to `config.toml` and edit it to match your environment (`config.toml` is gitignored since it will contain your controller credentials).
 
 The most important is probably `excluded` list; as this is your safety net; IPs and networks that will never be blocked even if they appear in a threat feed... 
 
@@ -105,7 +107,7 @@ cargo run --release
 ```
 
 **What happens:**
-1. Connects to MongoDB
+1. Logs in to your UniFi controller's API
 2. Downloads IP lists from enabled sources
 3. Filters out junk and excluded networks
 4. Creates/updates firewall groups in UniFi Controller
@@ -173,7 +175,7 @@ cargo run --release -- --clean
 This will delete all firewall groups. After cleaning, disable the problematic feed in `config.toml` before syncing again.
 
 **Option 2 - Manual deletion:**
-Connect to your UniFi's database with a mongo client and delete the specific groups from the `ace/firewall_group` collection using the IDs from the error messages. 
+Delete the offending firewall group(s) via the UniFi web UI (Settings → Firewall & Security → Firewall Groups, or similar depending on firmware version) using the names/IDs from the error messages. 
 
 > [!NOTE]
 > The maximum size of a firewall group appears to be around 10,000 IPs (educated guess)
@@ -201,7 +203,7 @@ The tool logs the error and continues processing other sources. One failed feed 
 <details>
 <summary><strong>Can I use this with UDM/Cloud Key/Cloud-hosted controllers?</strong></summary>
 
-I have only tested this on UDM Pro and SE, but it should work on other UniFi devices that expose MongoDB access.
+I have only tested this on UDM Pro and SE, but it should work on other UniFi devices that expose the controller's REST API.
 
 </details>
 
@@ -232,7 +234,7 @@ Start with conservative feeds (Firehol Level1, Spamhaus DROP) and monitor for fa
 <details>
 <summary><strong>Multiple sites?</strong></summary>
 
-Change the `site_name` in `config.toml` to match your site (visible in the UniFi URL: `/manage/site/your_site_name`).
+Change the `site` in `config.toml` under `[controller]` to match your site (visible in the UniFi URL: `/manage/site/your_site_name`).
 
 I have not tested this with multiple sites - Here be dragons.
 
