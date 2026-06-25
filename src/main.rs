@@ -60,7 +60,7 @@ async fn main() -> anyhow::Result<()> {
             error!("Clean mode cannot be used in dry-run mode");
             return Ok(());
         }
-        op_clean(&client).await?;
+        op_clean(&cfg, &client).await?;
     } else {
         op_normal(&cfg, &client).await?;
     }
@@ -144,7 +144,8 @@ async fn op_normal(cfg: &config::Config, client: &unifi_api::UnifiClient) -> any
     for source in cfg.iplists.sources.iter().filter(|s| s.enabled) {
         info!("Processing iplist: {}", source.name);
 
-        let group = firewall_groups.iter().find(|g| g.name == source.name);
+        let group_name = format!("{}{}", cfg.application.group_prefix, source.name);
+        let group = firewall_groups.iter().find(|g| g.name == group_name);
         let mut before_ips: Vec<String> = Vec::new();
 
         if let Some(g) = group {
@@ -198,7 +199,7 @@ async fn op_normal(cfg: &config::Config, client: &unifi_api::UnifiClient) -> any
                         info!("Dry run enabled, not updating database");
                         info!("---")
                     } else {
-                        let chunk_name = format!("{}_{}", source.name, i);
+                        let chunk_name = format!("{}_{}", group_name, i);
                         let existing_chunk =
                             firewall_groups.iter().find(|g| g.name == chunk_name);
                         client
@@ -213,9 +214,9 @@ async fn op_normal(cfg: &config::Config, client: &unifi_api::UnifiClient) -> any
 
         if !cfg.application.dry_run {
             client
-                .upsert_iplist(&source.name, ips, group)
+                .upsert_iplist(&group_name, ips, group)
                 .await
-                .context(format!("Failed to upsert iplist '{}'", source.name))?;
+                .context(format!("Failed to upsert iplist '{}'", group_name))?;
         } else {
             info!("Dry run enabled, not updating database");
             info!("---")
@@ -223,13 +224,45 @@ async fn op_normal(cfg: &config::Config, client: &unifi_api::UnifiClient) -> any
     }
     Ok(())
 }
-async fn op_clean(client: &unifi_api::UnifiClient) -> anyhow::Result<()> {
+async fn op_clean(cfg: &config::Config, client: &unifi_api::UnifiClient) -> anyhow::Result<()> {
     info!("Clean mode activated");
 
-    println!(
-        "\n\nWARNING: This will delete ALL firewall groups from the database.\
-            \nThis operation cannot be undone, and may result in broken firewall rules on your UniFi controller."
-    );
+    let all_groups = client
+        .read_firewall_groups()
+        .await
+        .context("Failed to read firewall groups")?;
+
+    let prefix = &cfg.application.group_prefix;
+    let targets: Vec<_> = all_groups
+        .iter()
+        .filter(|g| g.name.starts_with(prefix.as_str()))
+        .collect();
+
+    if targets.is_empty() {
+        info!("No firewall groups match the current scope; nothing to delete");
+        return Ok(());
+    }
+
+    if prefix.is_empty() {
+        println!(
+            "\n\nWARNING: This will delete ALL {} firewall group(s) on this site.\
+                \nThis operation cannot be undone, and may result in broken firewall rules on your UniFi controller.",
+            targets.len()
+        );
+    } else {
+        println!(
+            "\n\nWARNING: This will delete the {} firewall group(s) with the prefix '{}':\
+                \n  {}\
+                \nThis operation cannot be undone, and may result in broken firewall rules on your UniFi controller.",
+            targets.len(),
+            prefix,
+            targets
+                .iter()
+                .map(|g| g.name.as_str())
+                .collect::<Vec<_>>()
+                .join("\n  ")
+        );
+    }
     println!("Are you sure you want to continue? (yes/no): ");
 
     let mut input = String::new();
@@ -240,8 +273,9 @@ async fn op_clean(client: &unifi_api::UnifiClient) -> anyhow::Result<()> {
     let input = input.trim().to_lowercase();
 
     if input == "yes" || input == "y" {
+        let targets: Vec<_> = targets.into_iter().cloned().collect();
         let deleted_count = client
-            .delete_all_firewall_groups()
+            .delete_firewall_groups(&targets)
             .await
             .context("Failed to delete firewall groups")?;
 

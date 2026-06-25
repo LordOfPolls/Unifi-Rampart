@@ -51,6 +51,9 @@ pub struct ApplicationConfig {
     pub split_on_max_items: bool,
     pub dry_run: bool,
     pub allow_insecure_requests: bool,
+    /// Prepended to every firewall group name Rampart manages. Empty by default.
+    #[serde(default)]
+    pub group_prefix: String,
 }
 
 pub fn load() -> Result<Config> {

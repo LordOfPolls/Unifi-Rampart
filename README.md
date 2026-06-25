@@ -127,7 +127,7 @@ Simulates the sync without making any database changes. Use this to preview what
 ```bash
 cargo run --release -- --clean
 ```
-Deletes all firewall groups from the controller, should only be used as a last resort.
+Deletes firewall groups from the controller, should only be used as a last resort. If `group_prefix` is set in `config.toml`, only groups whose name starts with that prefix are deleted; if it's empty, all firewall groups on the site are deleted.
 
 > [!CAUTION]
 > This operation cannot be undone and may break existing firewall rules that reference these groups.

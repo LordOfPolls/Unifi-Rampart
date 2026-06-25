@@ -297,15 +297,14 @@ impl UnifiClient {
         Ok(())
     }
 
-    /// Delete every firewall group on the site. Groups still referenced by an
-    /// active rule (`api.err.ObjectReferredBy`) are logged and skipped rather
-    /// than aborting. Returns the number actually deleted.
-    pub async fn delete_all_firewall_groups(&self) -> Result<u64> {
-        info!("Deleting all firewall groups");
-        let groups = self.read_firewall_groups().await?;
+    /// Delete the given firewall groups. Groups still referenced by an active
+    /// rule (`api.err.ObjectReferredBy`) are logged and skipped rather than
+    /// aborting. Returns the number actually deleted.
+    pub async fn delete_firewall_groups(&self, groups: &[FirewallGroup]) -> Result<u64> {
+        info!("Deleting {} firewall group(s)", groups.len());
         let mut deleted = 0u64;
 
-        for group in &groups {
+        for group in groups {
             let Some(id) = &group.id else {
                 warn!("Skipping firewall group '{}' with no '_id'", group.name);
                 continue;

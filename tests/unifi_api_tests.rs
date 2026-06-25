@@ -275,30 +275,28 @@ async fn rc_error_envelope_on_200_is_error_with_msg() {
 }
 
 #[tokio::test]
-async fn delete_all_skips_referenced_group_and_counts_the_rest() {
+async fn delete_firewall_groups_skips_referenced_group_and_counts_the_rest() {
     let server = MockServer::start().await;
 
     let id_ok = "aaaaaaaaaaaaaaaaaaaaaaaa";
     let id_referred = "bbbbbbbbbbbbbbbbbbbbbbbb";
 
-    Mock::given(method("GET"))
-        .and(path("/proxy/network/api/s/default/rest/firewallgroup"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(ok_envelope(json!([
-            {
-                "_id": id_ok,
-                "name": "deletable",
-                "group_type": "address-group",
-                "group_members": []
-            },
-            {
-                "_id": id_referred,
-                "name": "in-use",
-                "group_type": "address-group",
-                "group_members": []
-            }
-        ]))))
-        .mount(&server)
-        .await;
+    let groups = vec![
+        FirewallGroup {
+            id: Some(id_ok.to_string()),
+            group_members: vec![],
+            group_type: "address-group".to_string(),
+            name: "deletable".to_string(),
+            site_id: None,
+        },
+        FirewallGroup {
+            id: Some(id_referred.to_string()),
+            group_members: vec![],
+            group_type: "address-group".to_string(),
+            name: "in-use".to_string(),
+            site_id: None,
+        },
+    ];
 
     // One delete succeeds.
     Mock::given(method("DELETE"))
@@ -323,7 +321,7 @@ async fn delete_all_skips_referenced_group_and_counts_the_rest() {
         .await;
 
     let client = UnifiClient::new(&apikey_cfg(&server.uri())).unwrap();
-    let deleted = client.delete_all_firewall_groups().await.unwrap();
+    let deleted = client.delete_firewall_groups(&groups).await.unwrap();
     assert_eq!(deleted, 1, "only the unreferenced group should be deleted");
 }
 
