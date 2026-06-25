@@ -1,12 +1,18 @@
-[mongodb]
-connection_url = "mongodb://127.0.0.1:27117"  # MongoDB connection string for UniFi Controller
-database_name = "ace"  # You shouldnt need to change this 
+[controller]
+url = "https://192.168.1.1"          # Base URL of your UniFi controller
+site = "default"                      # UniFi site shortname to update (use "default" for the main site)
+is_unifi_os = true                    # true for UDM/UDR/Cloud Gateway, false for classic self-hosted controllers on :8443
+verify_tls = false                    # UniFi controllers typically use self-signed certs
+# Provide EITHER an api_key (recommended, UDM/UniFi OS only) OR a username+password pair, not both:
+api_key = ""                          # Local API key generated in the controller UI (Settings > Control Plane > Integrations, or similar, depending on firmware)
+# username = ""
+# password = ""
 
 [application]
 log_level = "info"  # Logging verbosity level (trace, debug, info, warn, error)
-site_name = "default"  # UniFi site name to update (use "default" for the main site)
+group_prefix = "Rampart_"  # Prepended to every firewall group name Rampart manages, so they're easy to spot in the UniFi UI. Leave empty ("") for no prefix.
 allow_insecure_requests = false  # Allow HTTP downloads without SSL verification
-max_items_in_list = 10_000  # Maximum number of IPs per firewall group to prevent UniFi overload. I stongly advise not changing this. 
+max_items_in_list = 10_000  # Maximum number of IPs per firewall group to prevent UniFi overload. I stongly advise not changing this.
 split_on_max_items = false  # Automatically split large IP lists into multiple firewall groups
 dry_run = false  # Test mode that downloads lists but doesn't write to the database
 excluded = [  # IP ranges to exclude from downloaded blocklists
