@@ -1,7 +1,6 @@
 use crate::config::ControllerConfig;
 use crate::models::unifi::FirewallGroup;
 use anyhow::{Context, Result, anyhow};
-use itertools::Itertools;
 use log::{debug, info, warn};
 use reqwest::{Client, Method, StatusCode, header::HeaderMap};
 use serde_json::{Value, json};
