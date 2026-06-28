@@ -87,10 +87,67 @@ async fn credential_login_and_csrf_on_mutation() {
     let client = UnifiClient::new(&cred_cfg(&server.uri())).unwrap();
     client.login().await.unwrap();
     client
-        .upsert_iplist("blocklist", vec!["1.2.3.4".to_string()], None)
+        .upsert_iplist(
+            "blocklist",
+            "address-group",
+            vec!["1.2.3.4".to_string()],
+            None,
+        )
         .await
         .unwrap();
     // Mock expectations verified on drop.
+}
+
+#[tokio::test]
+async fn rotated_csrf_token_is_captured_and_resent() {
+    let server = MockServer::start().await;
+    const ROTATED_TOKEN: &str = "rotated-csrf-token-xyz789";
+
+    // Login hands out the initial token.
+    Mock::given(method("POST"))
+        .and(path("/api/auth/login"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("x-csrf-token", CSRF_TOKEN)
+                .set_body_json(ok_envelope(json!([]))),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    // A GET rotates the token via X-Updated-CSRF-Token rather than resending x-csrf-token.
+    Mock::given(method("GET"))
+        .and(path("/proxy/network/api/s/default/rest/firewallgroup"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("x-updated-csrf-token", ROTATED_TOKEN)
+                .set_body_json(ok_envelope(json!([]))),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    // The next mutation must carry the rotated token, not the original one.
+    Mock::given(method("POST"))
+        .and(path("/proxy/network/api/s/default/rest/firewallgroup"))
+        .and(header("x-csrf-token", ROTATED_TOKEN))
+        .respond_with(ResponseTemplate::new(200).set_body_json(ok_envelope(json!([]))))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let client = UnifiClient::new(&cred_cfg(&server.uri())).unwrap();
+    client.login().await.unwrap();
+    client.read_firewall_groups().await.unwrap();
+    client
+        .upsert_iplist(
+            "blocklist",
+            "address-group",
+            vec!["1.2.3.4".to_string()],
+            None,
+        )
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -170,7 +227,12 @@ async fn upsert_create_posts_without_id() {
 
     let client = UnifiClient::new(&apikey_cfg(&server.uri())).unwrap();
     client
-        .upsert_iplist("blocklist", vec!["9.9.9.9".to_string()], None)
+        .upsert_iplist(
+            "blocklist",
+            "address-group",
+            vec!["9.9.9.9".to_string()],
+            None,
+        )
         .await
         .unwrap();
 }
@@ -208,6 +270,7 @@ async fn upsert_update_puts_full_body_to_id() {
     client
         .upsert_iplist(
             "blocklist",
+            "address-group",
             vec!["8.8.8.8".to_string(), "8.8.4.4".to_string()],
             Some(&existing),
         )

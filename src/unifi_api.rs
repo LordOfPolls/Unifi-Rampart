@@ -7,6 +7,7 @@ use reqwest::{Client, Method, StatusCode, header::HeaderMap};
 use serde_json::{Value, json};
 use std::sync::RwLock;
 use std::time::Duration;
+
 /// How the client authenticates against the controller.
 enum AuthMode {
     /// UDM / UniFi-OS API key sent via the `X-API-KEY` header. No login/session.
@@ -78,11 +79,16 @@ impl UnifiClient {
         }
     }
 
-    /// Store a fresh CSRF token if the response carried one.
+    /// Store a fresh CSRF token if the response carried one. Newer UniFi OS
+    /// versions (3.x+) rotate the token and return the new value in
+    /// `X-Updated-CSRF-Token` instead of resending `x-csrf-token`.
     fn capture_csrf(&self, headers: &HeaderMap) {
-        if let Some(val) = headers.get("x-csrf-token")
-            && let Ok(token) = val.to_str()
-        {
+        let token = headers
+            .get("x-updated-csrf-token")
+            .or_else(|| headers.get("x-csrf-token"))
+            .and_then(|val| val.to_str().ok());
+
+        if let Some(token) = token {
             *self.csrf.write().unwrap() = Some(token.to_string());
         }
     }
@@ -246,15 +252,16 @@ impl UnifiClient {
     /// Create or update a firewall group's IP list.
     ///
     /// `existing` is the already-fetched group (looked up by name by the
-    /// caller). `Some` -> PUT update; `None` -> POST create.
+    /// caller). `Some` -> PUT update; `None` -> POST create using
+    /// `group_type` (e.g. `"address-group"` or `"ipv6-address-group"`).
+    /// `iplist` is expected to already be deduplicated by the caller.
     pub async fn upsert_iplist(
         &self,
         group_name: &str,
+        group_type: &str,
         iplist: Vec<String>,
         existing: Option<&FirewallGroup>,
     ) -> Result<()> {
-        let iplist_deduped: Vec<String> = iplist.into_iter().unique().collect();
-
         match existing {
             Some(group) => {
                 let id = group
@@ -264,11 +271,11 @@ impl UnifiClient {
                 info!(
                     "Updating firewall group '{}' with {} IP address(es)",
                     group.name,
-                    iplist_deduped.len()
+                    iplist.len()
                 );
                 let updated = FirewallGroup {
                     id: group.id.clone(),
-                    group_members: iplist_deduped,
+                    group_members: iplist,
                     group_type: group.group_type.clone(),
                     name: group.name.clone(),
                     site_id: group.site_id.clone(),
@@ -283,12 +290,12 @@ impl UnifiClient {
                 info!(
                     "Creating firewall group '{}' with {} IP address(es)",
                     group_name,
-                    iplist_deduped.len()
+                    iplist.len()
                 );
                 let body = json!({
                     "name": group_name,
-                    "group_type": "address-group",
-                    "group_members": iplist_deduped,
+                    "group_type": group_type,
+                    "group_members": iplist,
                 });
                 let url = self.api_url("rest/firewallgroup");
                 self.execute(Method::POST, &url, Some(body)).await?;
