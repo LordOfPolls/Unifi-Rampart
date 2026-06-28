@@ -1,14 +1,32 @@
 use crate::config::IpListSource;
-use anyhow::{Context, Error, Result};
+use anyhow::{Context, Result};
 use ipnetwork::IpNetwork;
+use itertools::Itertools;
 use log::{debug, info, warn};
 use once_cell::sync::Lazy;
 use regex::Regex;
-use reqwest::Response;
+use reqwest::{Client, Response};
 use std::net::IpAddr;
 use std::time::Duration;
 
 pub static COMMENT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\s*[;#].*$|\/\/.*$").unwrap());
+
+/// Shared client: one connection pool/TLS context for all feeds.
+static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
+    Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(60))
+        .build()
+        .expect("Failed to build reqwest client")
+});
+
+/// The result of parsing a feed, partitioned by address family since UniFi
+/// requires IPv4 and IPv6 entries to live in different group types.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct ParsedIplist {
+    pub v4: Vec<String>,
+    pub v6: Vec<String>,
+}
 
 pub fn parse_ip_or_network(s: &str) -> Option<IpNetwork> {
     // Try parsing as a network first (with CIDR notation)
@@ -79,12 +97,7 @@ pub fn filter_excluded(ips: Vec<String>, excluded: &[String]) -> (Vec<String>, u
 pub async fn download(url: &str) -> Result<Response> {
     debug!("Downloading iplist from {}", url);
 
-    let r_client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()
-        .context("Failed to create reqwest client")?;
-
-    let resp = r_client
+    let resp = HTTP_CLIENT
         .get(url)
         .send()
         .await
@@ -102,15 +115,19 @@ pub async fn download(url: &str) -> Result<Response> {
     Ok(resp)
 }
 
+/// Fail the whole feed when more than this fraction of lines don't parse
+/// (likely an HTML error page served with HTTP 200).
+const BROKEN_FEED_DROP_RATE: f64 = 0.5;
+
 pub async fn parse(
     source: &IpListSource,
     excluded: &[String],
     resp: Response,
-) -> Result<Result<Vec<String>, Error>, Error> {
+) -> Result<ParsedIplist> {
     let text = resp.text().await.context("Failed to read response body")?;
-    let url = source.url.clone();
+    let url = &source.url;
 
-    let lines: Vec<String> = match source.handler.as_deref() {
+    let candidate_lines: Vec<String> = match source.handler.as_deref() {
         Some("AWS") => {
             crate::parsers::aws::parse(&text).context("Failed to parse AWS IP ranges")?
         }
@@ -123,11 +140,51 @@ pub async fn parse(
             .collect(),
     };
 
-    let downloaded_count = text.lines().count();
+    let total_candidates = candidate_lines.len();
+    let mut v4 = Vec::new();
+    let mut v6 = Vec::new();
+    let mut dropped = 0usize;
 
-    let (filtered_lines, excluded_count) = filter_excluded(lines, excluded);
+    for line in &candidate_lines {
+        // Keep the original text: normalizing a bare IP to /32 or /128 gets rejected by UniFi.
+        match parse_ip_or_network(line) {
+            Some(net) if net.is_ipv4() => v4.push(line.clone()),
+            Some(_) => v6.push(line.clone()),
+            None => {
+                debug!("Dropping unparseable line from '{}': {}", source.name, line);
+                dropped += 1;
+            }
+        }
+    }
 
-    if filtered_lines.is_empty() {
+    if total_candidates > 0 {
+        let drop_rate = dropped as f64 / total_candidates as f64;
+        if drop_rate > BROKEN_FEED_DROP_RATE {
+            return Err(anyhow::anyhow!(
+                "Feed '{}' looks broken: {} of {} lines ({:.0}%) failed to parse as an IP/network \
+                 (an HTML error page or a changed feed format is a common cause); refusing to sync it",
+                source.name,
+                dropped,
+                total_candidates,
+                drop_rate * 100.0
+            ));
+        }
+    }
+
+    if dropped > 0 {
+        warn!(
+            "Dropped {} unparseable line(s) out of {} from feed '{}'",
+            dropped, total_candidates, source.name
+        );
+    }
+
+    let (v4, v4_excluded) = filter_excluded(v4, excluded);
+    let (v6, v6_excluded) = filter_excluded(v6, excluded);
+
+    let v4: Vec<String> = v4.into_iter().unique().collect();
+    let v6: Vec<String> = v6.into_iter().unique().collect();
+
+    if v4.is_empty() && v6.is_empty() {
         warn!(
             "No IP addresses found in {}. This is probably fine, but check your exclusion rules.",
             url
@@ -135,11 +192,14 @@ pub async fn parse(
     }
 
     info!(
-        "Downloaded {} IP addresses from iplist, filtered {} excluded IPs, keeping {}",
-        downloaded_count,
-        excluded_count,
-        filtered_lines.len()
+        "Parsed '{}': {} IPv4, {} IPv6 (excluded {}, dropped {} unparseable of {} lines)",
+        source.name,
+        v4.len(),
+        v6.len(),
+        v4_excluded + v6_excluded,
+        dropped,
+        total_candidates
     );
 
-    Ok(Ok(filtered_lines))
+    Ok(ParsedIplist { v4, v6 })
 }

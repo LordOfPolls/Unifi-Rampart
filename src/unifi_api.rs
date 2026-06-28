@@ -1,12 +1,12 @@
 use crate::config::ControllerConfig;
 use crate::models::unifi::FirewallGroup;
 use anyhow::{Context, Result, anyhow};
+use itertools::Itertools;
 use log::{debug, info, warn};
 use reqwest::{Client, Method, StatusCode, header::HeaderMap};
 use serde_json::{Value, json};
 use std::sync::RwLock;
 use std::time::Duration;
-use itertools::Itertools;
 /// How the client authenticates against the controller.
 enum AuthMode {
     /// UDM / UniFi-OS API key sent via the `X-API-KEY` header. No login/session.
@@ -153,11 +153,8 @@ impl UnifiClient {
                 req = req.header("X-API-KEY", key);
             }
             AuthMode::Credentials { .. } => {
-                let mutating =
-                    matches!(*method, Method::POST | Method::PUT | Method::DELETE);
-                if mutating
-                    && let Some(token) = self.csrf.read().unwrap().clone()
-                {
+                let mutating = matches!(*method, Method::POST | Method::PUT | Method::DELETE);
+                if mutating && let Some(token) = self.csrf.read().unwrap().clone() {
                     req = req.header("x-csrf-token", token);
                 }
             }
@@ -225,7 +222,11 @@ impl UnifiClient {
                 anyhow!(
                     "Controller returned error for {}: {}",
                     url,
-                    if msg.is_empty() { "unknown error" } else { &msg }
+                    if msg.is_empty() {
+                        "unknown error"
+                    } else {
+                        &msg
+                    }
                 )
             });
         }
@@ -272,8 +273,8 @@ impl UnifiClient {
                     name: group.name.clone(),
                     site_id: group.site_id.clone(),
                 };
-                let body = serde_json::to_value(&updated)
-                    .context("Failed to serialize firewall group")?;
+                let body =
+                    serde_json::to_value(&updated).context("Failed to serialize firewall group")?;
                 let url = self.api_url(&format!("rest/firewallgroup/{}", id));
                 self.execute(Method::PUT, &url, Some(body)).await?;
                 info!("Successfully updated firewall group '{}'", group.name);

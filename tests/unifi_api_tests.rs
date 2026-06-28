@@ -63,7 +63,9 @@ async fn credential_login_and_csrf_on_mutation() {
     // Login endpoint returns a CSRF token header.
     Mock::given(method("POST"))
         .and(path("/api/auth/login"))
-        .and(body_json(json!({ "username": "admin", "password": "password" })))
+        .and(body_json(
+            json!({ "username": "admin", "password": "password" }),
+        ))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("x-csrf-token", CSRF_TOKEN)

@@ -25,6 +25,8 @@ pub fn parse(text: &str) -> Result<Vec<String>> {
     Ok(ips)
 }
 
+// hits a live external endpoint; run with cargo test -- --ignored
+#[ignore]
 #[tokio::test]
 async fn test_e2e_google_json() {
     use crate::config::IpListSource;
@@ -40,10 +42,9 @@ async fn test_e2e_google_json() {
     let resp = iplist::download(&source.url)
         .await
         .expect("Failed to download");
-    let result = iplist::parse(&source, &[], resp)
+    let parsed = iplist::parse(&source, &[], resp)
         .await
         .expect("Failed to parse");
-    let ips = result.expect("Parsing returned error");
 
-    assert!(!ips.is_empty());
+    assert!(!parsed.v4.is_empty());
 }

@@ -39,8 +39,8 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Starting Unifi-Rampart");
 
-    let client = unifi_api::UnifiClient::new(&cfg.controller)
-        .context("Failed to build UniFi API client")?;
+    let client =
+        unifi_api::UnifiClient::new(&cfg.controller).context("Failed to build UniFi API client")?;
 
     client.login().await.context(
         "Failed to log in to UniFi controller. Check your controller URL/credentials/API key.",
@@ -48,10 +48,7 @@ async fn main() -> anyhow::Result<()> {
 
     let check = sanity_check(&cfg);
     if let Err(e) = check {
-        error!(
-            "Aborting due to configuration errors: {}",
-            e
-        );
+        error!("Aborting due to configuration errors: {}", e);
         return Ok(());
     }
 
@@ -200,8 +197,7 @@ async fn op_normal(cfg: &config::Config, client: &unifi_api::UnifiClient) -> any
                         info!("---")
                     } else {
                         let chunk_name = format!("{}_{}", group_name, i);
-                        let existing_chunk =
-                            firewall_groups.iter().find(|g| g.name == chunk_name);
+                        let existing_chunk = firewall_groups.iter().find(|g| g.name == chunk_name);
                         client
                             .upsert_iplist(&chunk_name, chunk.to_vec(), existing_chunk)
                             .await

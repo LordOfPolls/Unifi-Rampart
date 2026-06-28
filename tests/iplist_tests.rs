@@ -1,5 +1,18 @@
 use ipnetwork::IpNetwork;
+use unifi_rampart::config::IpListSource;
+use unifi_rampart::iplist;
 use unifi_rampart::iplist::{COMMENT_REGEX, filter_excluded, parse_ip_or_network, should_exclude};
+use wiremock::matchers::{method, path};
+use wiremock::{Mock, MockServer, ResponseTemplate};
+
+fn plain_source(url: String) -> IpListSource {
+    IpListSource {
+        name: "test_feed".to_string(),
+        url,
+        enabled: true,
+        handler: None,
+    }
+}
 #[test]
 fn test_parse_ip_or_network_single_ipv4() {
     let result = parse_ip_or_network("192.168.1.1");
@@ -135,12 +148,11 @@ async fn test_e2e_plain_text() {
     let resp = iplist::download(&source.url)
         .await
         .expect("Failed to download");
-    let result = iplist::parse(&source, &[], resp)
+    let parsed = iplist::parse(&source, &[], resp)
         .await
         .expect("Failed to parse");
-    let ips = result.expect("Parsing returned error");
 
-    assert!(!ips.is_empty());
+    assert!(!parsed.v4.is_empty());
 }
 
 #[tokio::test]
@@ -166,17 +178,76 @@ async fn test_e2e_with_exclusions() {
     let resp = iplist::download(&source.url)
         .await
         .expect("Failed to download");
-    let result = iplist::parse(&source, &excluded, resp)
+    let parsed = iplist::parse(&source, &excluded, resp)
         .await
         .expect("Failed to parse");
-    let ips = result.expect("Parsing returned error");
 
-    assert!(!ips.is_empty());
+    assert!(!parsed.v4.is_empty());
 
     // Verify no private IPs made it through
-    for ip in &ips {
+    for ip in &parsed.v4 {
         assert!(!ip.starts_with("10."));
         assert!(!ip.starts_with("192.168."));
         assert!(!ip.starts_with("172.16."));
     }
+}
+
+#[tokio::test]
+async fn parse_drops_garbage_and_partitions_v4_v6() {
+    let server = MockServer::start().await;
+    let body = "192.168.1.1\nnot-an-ip\n2001:db8::1\n# comment\n10.0.0.0/8\ngarbage line\n";
+
+    Mock::given(method("GET"))
+        .and(path("/list.txt"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(body))
+        .mount(&server)
+        .await;
+
+    let source = plain_source(format!("{}/list.txt", server.uri()));
+    let resp = iplist::download(&source.url).await.expect("download");
+    let parsed = iplist::parse(&source, &[], resp)
+        .await
+        .expect("valid entries should still parse despite some garbage");
+
+    assert_eq!(parsed.v4, vec!["192.168.1.1", "10.0.0.0/8"]);
+    assert_eq!(parsed.v6, vec!["2001:db8::1"]);
+}
+
+#[tokio::test]
+async fn parse_rejects_feed_that_looks_broken() {
+    let server = MockServer::start().await;
+    // Simulates an HTML error page (e.g. a Cloudflare interstitial) served with HTTP 200.
+    let body = "<html>\n<head><title>503 Service Unavailable</title></head>\n<body>Error</body>\n</html>\n192.168.1.1\n";
+
+    Mock::given(method("GET"))
+        .and(path("/broken.txt"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(body))
+        .mount(&server)
+        .await;
+
+    let source = plain_source(format!("{}/broken.txt", server.uri()));
+    let resp = iplist::download(&source.url).await.expect("download");
+    let err = iplist::parse(&source, &[], resp)
+        .await
+        .expect_err("mostly-garbage feed should be rejected rather than synced");
+
+    assert!(err.to_string().contains("looks broken"));
+}
+
+#[tokio::test]
+async fn parse_dedupes_entries() {
+    let server = MockServer::start().await;
+    let body = "1.1.1.1\n1.1.1.1\n8.8.8.8\n";
+
+    Mock::given(method("GET"))
+        .and(path("/dupes.txt"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(body))
+        .mount(&server)
+        .await;
+
+    let source = plain_source(format!("{}/dupes.txt", server.uri()));
+    let resp = iplist::download(&source.url).await.expect("download");
+    let parsed = iplist::parse(&source, &[], resp).await.expect("parse");
+
+    assert_eq!(parsed.v4, vec!["1.1.1.1", "8.8.8.8"]);
 }
