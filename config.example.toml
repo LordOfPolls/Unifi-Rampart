@@ -81,6 +81,16 @@ enabled = false
 # Source: The Spamhaus Project (https://www.spamhaus.org/drop/)
 
 [[iplists.sources]]
+name = "Spamhaus_DROPv6"
+url = "https://www.spamhaus.org/drop/dropv6.txt"
+enabled = false
+# Spamhaus DROPv6: IPv6 companion to Spamhaus DROP
+# Hijacked or leased IPv6 netblocks used for spam/malware distribution and cybercrime
+# Entries land in a separate "_v6" firewall group since UniFi needs a dedicated
+# ipv6-address-group for IPv6 members
+# Source: The Spamhaus Project (https://www.spamhaus.org/drop/)
+
+[[iplists.sources]]
 name = "GreenSnow"
 url = "https://blocklist.greensnow.co/greensnow.txt"
 enabled = false
@@ -115,6 +125,14 @@ name = "Cloudflare_Servers"
 url = "https://www.cloudflare.com/ips-v4"
 enabled = false
 # Cloudflare IP Ranges: Official Cloudflare IPv4 address space
+# Use for allowlisting Cloudflare CDN traffic or blocklisting CDN-proxied threats
+# Source: Cloudflare (https://www.cloudflare.com)
+
+[[iplists.sources]]
+name = "Cloudflare_Servers_v6"
+url = "https://www.cloudflare.com/ips-v6"
+enabled = false
+# Cloudflare IP Ranges: Official Cloudflare IPv6 address space
 # Use for allowlisting Cloudflare CDN traffic or blocklisting CDN-proxied threats
 # Source: Cloudflare (https://www.cloudflare.com)
 
