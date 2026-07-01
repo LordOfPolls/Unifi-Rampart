@@ -66,11 +66,11 @@ The binary will be at: `target/aarch64-unknown-linux-musl/release/unifi-rampart`
 **Deploy to your gateway:**
 ```bash
 # Copy binary and config to your gateway
-scp target/aarch64-unknown-linux-musl/release/unifi-rampart root@:/data/custom/unifi-rampart
-scp config.toml root@:/data/custom/unifi-rampart
+scp target/aarch64-unknown-linux-musl/release/unifi-rampart root@<gateway-ip>:/data/custom/unifi-rampart
+scp config.toml root@<gateway-ip>:/data/custom/unifi-rampart
 
 # SSH in and run
-ssh root@
+ssh root@<gateway-ip>
 cd /data/custom/unifi-rampart
 ./unifi-rampart
 ```

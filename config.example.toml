@@ -12,7 +12,7 @@ api_key = ""                          # Local API key generated in the controlle
 log_level = "info"  # Logging verbosity level (trace, debug, info, warn, error)
 group_prefix = "Rampart_"  # Prepended to every firewall group name Rampart manages, so they're easy to spot in the UniFi UI. Leave empty ("") for no prefix.
 allow_insecure_requests = false  # Allow HTTP downloads without SSL verification
-max_items_in_list = 10_000  # Maximum number of IPs per firewall group to prevent UniFi overload. I stongly advise not changing this.
+max_items_in_list = 10_000  # Maximum number of IPs per firewall group to prevent UniFi overload. I strongly advise not changing this.
 split_on_max_items = false  # Automatically split large IP lists into multiple firewall groups
 dry_run = false  # Test mode that downloads lists but doesn't write to the database
 excluded = [  # IP ranges to exclude from downloaded blocklists
@@ -108,7 +108,7 @@ enabled = false
 
 
 
-###### Whitelist options, i dont reocommend blocking the following 3 ######
+###### Whitelist options, I don't recommend blocking the following 3 ######
 
 [[iplists.sources]]
 name = "Cloudflare_Servers"
