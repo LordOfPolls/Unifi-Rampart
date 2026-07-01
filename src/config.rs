@@ -64,6 +64,7 @@ pub fn load() -> Result<Config> {
 pub fn load_from_path(path: &str) -> Result<Config> {
     let config = ConfigBuilder::builder()
         .add_source(config::File::with_name(path))
+        .add_source(config::Environment::with_prefix("RAMPART").separator("__"))
         .build()
         .context("Failed to load config.toml")?;
 
