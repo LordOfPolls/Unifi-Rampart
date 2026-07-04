@@ -6,7 +6,7 @@ use log::{debug, info, warn};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use reqwest::{Client, Response};
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::time::Duration;
 
 pub static COMMENT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\s*[;#].*$|\/\/.*$").unwrap());
@@ -94,6 +94,117 @@ pub fn filter_excluded(ips: Vec<String>, excluded: &[String]) -> (Vec<String>, u
     (filtered, excluded_count)
 }
 
+fn ip_to_u128(ip: IpAddr) -> u128 {
+    match ip {
+        IpAddr::V4(v4) => u32::from(v4) as u128,
+        IpAddr::V6(v6) => u128::from(v6),
+    }
+}
+
+fn u128_to_ip(value: u128, is_v4: bool) -> IpAddr {
+    if is_v4 {
+        IpAddr::V4(Ipv4Addr::from(value as u32))
+    } else {
+        IpAddr::V6(Ipv6Addr::from(value))
+    }
+}
+
+/// Bare IP for a single address (UniFi rejects explicit /32 and /128), CIDR otherwise.
+fn format_network(net: &IpNetwork) -> String {
+    let max_prefix = if net.is_ipv4() { 32 } else { 128 };
+    if net.prefix() == max_prefix {
+        net.ip().to_string()
+    } else {
+        net.to_string()
+    }
+}
+
+/// Split the inclusive address range `[start, end]` into the minimal set of
+/// CIDR blocks that cover *exactly* that range - no more, no less - and push
+/// their string representation onto `out`.
+fn split_range_into_cidrs(mut start: u128, end: u128, is_v4: bool, out: &mut Vec<String>) {
+    let max_prefix: u32 = if is_v4 { 32 } else { 128 };
+    loop {
+        // Largest block `start`'s alignment allows, shrunk until it fits `remaining`.
+        let align_bits = if start == 0 {
+            max_prefix
+        } else {
+            start.trailing_zeros().min(max_prefix)
+        };
+
+        let remaining = end - start;
+
+        let mut size_bits = align_bits;
+        while size_bits > 0 {
+            let block_len_minus_one = match 1u128.checked_shl(size_bits) {
+                Some(v) => v - 1,
+                None => u128::MAX,
+            };
+            if block_len_minus_one <= remaining {
+                break;
+            }
+            size_bits -= 1;
+        }
+
+        let prefix = (max_prefix - size_bits) as u8;
+        let net_ip = u128_to_ip(start, is_v4);
+        if let Ok(net) = IpNetwork::new(net_ip, prefix) {
+            out.push(format_network(&net));
+        }
+
+        match 1u128
+            .checked_shl(size_bits)
+            .and_then(|len| start.checked_add(len))
+        {
+            Some(next) if next <= end => start = next,
+            _ => break,
+        }
+    }
+}
+
+/// Merge adjacent/overlapping networks into the minimal exact cover - never
+/// widens or narrows the address set. Input must be a single address family
+/// (callers partition v4/v6).
+pub fn aggregate(entries: Vec<String>) -> Vec<String> {
+    if entries.len() < 2 {
+        return entries;
+    }
+
+    let nets: Vec<IpNetwork> = entries
+        .iter()
+        .filter_map(|e| parse_ip_or_network(e))
+        .collect();
+    let Some(is_v4) = nets.first().map(|n| n.is_ipv4()) else {
+        return Vec::new();
+    };
+
+    let mut ranges: Vec<(u128, u128)> = nets
+        .iter()
+        .map(|net| (ip_to_u128(net.network()), ip_to_u128(net.broadcast())))
+        .collect();
+
+    ranges.sort_unstable();
+
+    let mut merged: Vec<(u128, u128)> = Vec::with_capacity(ranges.len());
+    for (start, end) in ranges {
+        if let Some(last) = merged.last_mut()
+            && (start <= last.1 || (last.1 != u128::MAX && start == last.1 + 1))
+        {
+            if end > last.1 {
+                last.1 = end;
+            }
+            continue;
+        }
+        merged.push((start, end));
+    }
+
+    let mut result = Vec::with_capacity(merged.len());
+    for (start, end) in merged {
+        split_range_into_cidrs(start, end, is_v4, &mut result);
+    }
+    result
+}
+
 pub async fn download(url: &str) -> Result<Response> {
     debug!("Downloading iplist from {}", url);
 
@@ -122,6 +233,7 @@ const BROKEN_FEED_DROP_RATE: f64 = 0.5;
 pub async fn parse(
     source: &IpListSource,
     excluded: &[String],
+    aggregate_networks: bool,
     resp: Response,
 ) -> Result<ParsedIplist> {
     let text = resp.text().await.context("Failed to read response body")?;
@@ -199,6 +311,24 @@ pub async fn parse(
         v4_excluded + v6_excluded,
         dropped,
         total_candidates
+    );
+
+    if !aggregate_networks {
+        return Ok(ParsedIplist { v4, v6 });
+    }
+
+    let v4_before = v4.len();
+    let v6_before = v6.len();
+    let v4 = aggregate(v4);
+    let v6 = aggregate(v6);
+
+    info!(
+        "Aggregated '{}': IPv4 {} -> {}, IPv6 {} -> {}",
+        source.name,
+        v4_before,
+        v4.len(),
+        v6_before,
+        v6.len()
     );
 
     Ok(ParsedIplist { v4, v6 })

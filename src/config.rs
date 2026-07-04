@@ -49,6 +49,9 @@ pub struct ApplicationConfig {
     pub excluded: Vec<String>,
     pub max_items_in_list: usize,
     pub split_on_max_items: bool,
+    /// Merge adjacent/overlapping CIDR ranges before syncing; never changes what a list covers.
+    #[serde(default)]
+    pub aggregate: bool,
     pub dry_run: bool,
     pub allow_insecure_requests: bool,
     /// Prepended to every firewall group name Rampart manages. Empty by default.

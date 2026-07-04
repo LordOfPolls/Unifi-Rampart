@@ -14,6 +14,7 @@ group_prefix = "Rampart_"  # Prepended to every firewall group name Rampart mana
 allow_insecure_requests = false  # Allow HTTP downloads without SSL verification
 max_items_in_list = 10_000  # Maximum number of IPs per firewall group to prevent UniFi overload. I strongly advise not changing this.
 split_on_max_items = false  # Automatically split large IP lists into multiple firewall groups
+aggregate = true  # Merge adjacent/overlapping CIDR ranges and drop entries already covered by a broader range before syncing. Shrinks large feeds without changing what they block; try this before enabling split_on_max_items.
 dry_run = false  # Test mode that downloads lists but doesn't write to the database
 excluded = [  # IP ranges to exclude from downloaded blocklists
     "10.0.0.0/8",

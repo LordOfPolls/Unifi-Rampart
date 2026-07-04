@@ -154,7 +154,14 @@ async fn op_normal(cfg: &config::Config, client: &unifi_api::UnifiClient) -> any
             }
         };
 
-        let parsed = match iplist::parse(source, &cfg.application.excluded, resp).await {
+        let parsed = match iplist::parse(
+            source,
+            &cfg.application.excluded,
+            cfg.application.aggregate,
+            resp,
+        )
+        .await
+        {
             Ok(p) => p,
             Err(e) => {
                 error!("Failed to parse iplist '{}': {:#}", source.name, e);
