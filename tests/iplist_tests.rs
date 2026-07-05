@@ -425,10 +425,25 @@ fn aggregate_is_idempotent() {
 }
 
 /// Exhaustive check over every subset of a small /28 (16 addresses): for
-/// every subset of that space, expressed as a mix of single IPs and
-/// sub-CIDRs, aggregation must reproduce exactly the same address set.
+/// every subset of that space, aggregation must reproduce exactly the same
+/// address set.
+///
+/// Unlike `assert_same_address_set`, the oracle here enumerates addresses
+/// one by one via `IpNetwork::iter` rather than sorting/merging ranges -
+/// a real bug in `aggregate`'s merge logic wouldn't also be baked into the
+/// oracle, since it isn't the same algorithm.
 #[test]
 fn aggregate_preserves_address_set_exhaustively_over_small_space() {
+    fn covered_addresses(entries: &[String]) -> std::collections::HashSet<std::net::Ipv4Addr> {
+        entries
+            .iter()
+            .flat_map(|e| match parse_ip_or_network(e).expect("valid entry") {
+                IpNetwork::V4(net) => net.iter(),
+                IpNetwork::V6(_) => panic!("expected v4"),
+            })
+            .collect()
+    }
+
     let base: u32 = u32::from(std::net::Ipv4Addr::new(203, 0, 113, 0));
     for mask in 0u32..(1 << 16) {
         let mut entries = Vec::new();
@@ -442,6 +457,6 @@ fn aggregate_preserves_address_set_exhaustively_over_small_space() {
             continue;
         }
         let result = aggregate(entries.clone());
-        assert_same_address_set(&entries, &result);
+        assert_eq!(covered_addresses(&entries), covered_addresses(&result));
     }
 }
