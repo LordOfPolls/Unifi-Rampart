@@ -1,20 +1,21 @@
 use crate::config::IpListSource;
 use anyhow::{Context, Result};
 use ipnetwork::IpNetwork;
-use itertools::Itertools;
 use log::{debug, info, warn};
-use once_cell::sync::Lazy;
 use regex::Regex;
 use reqwest::{Client, Response};
+use std::collections::HashSet;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::sync::LazyLock;
 use std::time::Duration;
 
-pub static COMMENT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\s*[;#].*$|\/\/.*$").unwrap());
+pub static COMMENT_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\s*[;#].*$|\/\/.*$").unwrap());
 const BROKEN_FEED_DROP_RATE: f64 = 0.5;
 const MAX_FEED_BYTES: usize = 50 * 1024 * 1024;
 
 /// Shared client: one connection pool/TLS context for all feeds.
-static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
+static HTTP_CLIENT: LazyLock<Client> = LazyLock::new(|| {
     Client::builder()
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_secs(60))
@@ -302,11 +303,13 @@ pub async fn parse(
         );
     }
 
-    let (v4, v4_excluded) = filter_excluded(v4, excluded);
-    let (v6, v6_excluded) = filter_excluded(v6, excluded);
+    let (mut v4, v4_excluded) = filter_excluded(v4, excluded);
+    let (mut v6, v6_excluded) = filter_excluded(v6, excluded);
 
-    let v4: Vec<String> = v4.into_iter().unique().collect();
-    let v6: Vec<String> = v6.into_iter().unique().collect();
+    let mut seen = HashSet::new();
+    v4.retain(|x| seen.insert(x.clone()));
+    seen.clear();
+    v6.retain(|x| seen.insert(x.clone()));
 
     if v4.is_empty() && v6.is_empty() {
         warn!(
