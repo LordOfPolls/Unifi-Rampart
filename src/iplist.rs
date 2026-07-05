@@ -231,7 +231,6 @@ pub async fn download(url: &str) -> Result<Response> {
 
 /// Fail the whole feed when more than this fraction of lines don't parse
 /// (likely an HTML error page served with HTTP 200).
-
 async fn read_body_capped(mut resp: Response, max_bytes: usize) -> Result<String> {
     let mut buf = Vec::new();
     while let Some(chunk) = resp.chunk().await.context("Failed to read response body")? {
