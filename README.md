@@ -53,23 +53,51 @@ cargo build --release
 
 > [!TIP]
 > To run directly on your UDM/UDR, you'll need to cross-compile for ARM64 architecture.
-```bash
-# Install cross (one-time setup)
-cargo install cross
 
-# Build for ARM64
-cross build --release --target aarch64-unknown-linux-musl
+Commands below use [`just`](https://github.com/casey/just) (`cargo install just`, or via your package manager) to run the `justfile` at the repo root.
+
+Install one of these cross-compilation tools first:
+- [`cargo-zigbuild`](https://github.com/rust-cross/cargo-zigbuild): `cargo install cargo-zigbuild` + [zig](https://ziglang.org/download/)
+- [`cross`](https://github.com/cross-rs/cross): `cargo install cross` (needs Docker/Podman)
+
+```bash
+just build-udm
 ```
+`build-udm` uses `cargo-zigbuild` if installed, otherwise falls back to `cross`.
 
 The binary will be at: `target/aarch64-unknown-linux-musl/release/unifi-rampart`
 
-**Deploy to your gateway:**
-```bash
-# Copy binary and config to your gateway
-scp target/aarch64-unknown-linux-musl/release/unifi-rampart root@<gateway-ip>:/data/custom/unifi-rampart
-scp config.toml root@<gateway-ip>:/data/custom/unifi-rampart
+<details>
+<summary>Without <code>just</code></summary>
 
-# SSH in and run
+```bash
+cargo zigbuild --release --target aarch64-unknown-linux-musl
+# or
+cross build --release --target aarch64-unknown-linux-musl
+```
+
+</details>
+
+**Deploy to your gateway:**
+
+Copy `.env.example` to `.env` and fill in `UDM_HOST` (and `UDM_PASS` if your gateway uses password auth) then:
+```bash
+just sync
+```
+This builds, then scp's the binary and `config.toml` to `UDM_PATH` (default `/data/custom/unifi-rampart`) on the gateway.
+
+<details>
+<summary>Without <code>just</code></summary>
+
+```bash
+scp target/aarch64-unknown-linux-musl/release/unifi-rampart config.toml \
+    root@<gateway-ip>:/data/custom/unifi-rampart/
+```
+
+</details>
+
+SSH in and run it:
+```bash
 ssh root@<gateway-ip>
 cd /data/custom/unifi-rampart
 ./unifi-rampart
