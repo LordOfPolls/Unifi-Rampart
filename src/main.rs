@@ -116,7 +116,7 @@ fn sanity_check(cfg: &config::Config) -> anyhow::Result<()> {
     }
 
     for source in cfg.iplists.sources.iter().filter(|s| s.enabled) {
-        if !source.url.starts_with("https") && !cfg.application.allow_insecure_requests {
+        if !source.url.starts_with("https://") && !cfg.application.allow_insecure_requests {
             anyhow::bail!("IP list source {} is not using HTTPS.", source.name);
         }
     }
@@ -376,12 +376,16 @@ async fn sync_split(
     firewall_groups: &[FirewallGroup],
     group_name: &str,
     group_type: &str,
-    ips: Vec<String>,
+    mut ips: Vec<String>,
 ) -> anyhow::Result<()> {
     warn!(
         "IP list '{}' exceeds max items limit of {}, splitting into multiple lists",
         group_name, cfg.application.max_items_in_list
     );
+
+    // Sort so chunk membership only depends on set contents, not feed order -
+    // otherwise a feed that merely reorders its entries rewrites every chunk.
+    ips.sort_unstable();
 
     for (i, chunk) in ips.chunks(cfg.application.max_items_in_list).enumerate() {
         let chunk_name = format!("{}_{}", group_name, i);
@@ -541,8 +545,9 @@ fn op_install(interval: &str) -> anyhow::Result<()> {
         .context("Running binary has no file name")?
         .to_string_lossy();
 
+    // ponytail: truncates to last run's log only; add rotation if history is needed
     let cron_line = format!(
-        "{} root cd {} && ./{} >> /var/log/{}.log 2>&1\n",
+        "{} root cd {} && ./{} > /var/log/{}.log 2>&1\n",
         schedule,
         dir.display(),
         name,
