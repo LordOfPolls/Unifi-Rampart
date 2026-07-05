@@ -238,6 +238,27 @@ async fn parse_rejects_feed_that_looks_broken() {
 }
 
 #[tokio::test]
+async fn parse_rejects_body_over_size_cap() {
+    let server = MockServer::start().await;
+    // One byte past the 50MB cap in src/iplist.rs.
+    let body = "1\n".repeat(25 * 1024 * 1024 + 1);
+
+    Mock::given(method("GET"))
+        .and(path("/huge.txt"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(body))
+        .mount(&server)
+        .await;
+
+    let source = plain_source(format!("{}/huge.txt", server.uri()));
+    let resp = iplist::download(&source.url).await.expect("download");
+    let err = iplist::parse(&source, &[], false, resp)
+        .await
+        .expect_err("oversized feed should be rejected instead of buffered in full");
+
+    assert!(err.to_string().contains("byte cap"));
+}
+
+#[tokio::test]
 async fn parse_dedupes_entries() {
     let server = MockServer::start().await;
     let body = "1.1.1.1\n1.1.1.1\n8.8.8.8\n";

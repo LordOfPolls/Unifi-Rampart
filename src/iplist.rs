@@ -10,6 +10,8 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::time::Duration;
 
 pub static COMMENT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\s*[;#].*$|\/\/.*$").unwrap());
+const BROKEN_FEED_DROP_RATE: f64 = 0.5;
+const MAX_FEED_BYTES: usize = 50 * 1024 * 1024;
 
 /// Shared client: one connection pool/TLS context for all feeds.
 static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
@@ -228,7 +230,17 @@ pub async fn download(url: &str) -> Result<Response> {
 
 /// Fail the whole feed when more than this fraction of lines don't parse
 /// (likely an HTML error page served with HTTP 200).
-const BROKEN_FEED_DROP_RATE: f64 = 0.5;
+
+async fn read_body_capped(mut resp: Response, max_bytes: usize) -> Result<String> {
+    let mut buf = Vec::new();
+    while let Some(chunk) = resp.chunk().await.context("Failed to read response body")? {
+        buf.extend_from_slice(&chunk);
+        if buf.len() > max_bytes {
+            anyhow::bail!("Response body exceeded {max_bytes} byte cap");
+        }
+    }
+    String::from_utf8(buf).context("Response body was not valid UTF-8")
+}
 
 pub async fn parse(
     source: &IpListSource,
@@ -236,7 +248,7 @@ pub async fn parse(
     aggregate_networks: bool,
     resp: Response,
 ) -> Result<ParsedIplist> {
-    let text = resp.text().await.context("Failed to read response body")?;
+    let text = read_body_capped(resp, MAX_FEED_BYTES).await?;
     let url = &source.url;
 
     let candidate_lines: Vec<String> = match source.handler.as_deref() {
