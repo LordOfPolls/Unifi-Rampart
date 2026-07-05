@@ -103,7 +103,15 @@ cd /data/custom/unifi-rampart
 ./unifi-rampart
 ```
 
-From here you can set up a cron job to fire it at regular intervals.
+From here, install a cron job to fire it at regular intervals:
+```bash
+./unifi-rampart --install
+# or a custom interval, e.g. every 4 hours
+./unifi-rampart --install 4h
+```
+This can only be used when running on the gateway. 
+Writes `/etc/cron.d/unifi-rampart`, plus a `/data/on_boot.d/` script so the cron job survives firmware updates/reboots. 
+Requires `on_boot.d` to be set up on your gateway first - see [unifi-utilities/unifi-common](https://github.com/unifi-utilities/unifi-common).
 
 > [!NOTE]
 > When running on the gateway itself, set `url = "https://127.0.0.1"` and `verify_tls = false` in your `config.toml`.
@@ -165,6 +173,13 @@ To disable pruning and leave orphaned groups in place:
 ```bash
 cargo run --release -- --no-prune
 ```
+
+**Install as a cron job (gateway only):**
+```bash
+./unifi-rampart --install       # daily at 4am
+./unifi-rampart --install 4h    # every 4 hours (1h-24h)
+```
+See [Building for UniFi Gateway](#building-for-unifi-gateway-arm64) above.
 
 ## Threat Intelligence Sources
 

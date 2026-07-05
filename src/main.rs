@@ -3,8 +3,11 @@ use clap::Parser;
 use log::{error, info, warn};
 use std::collections::HashSet;
 use std::io::IsTerminal;
+use std::os::unix::fs::PermissionsExt;
 use unifi_rampart::models::unifi::FirewallGroup;
 use unifi_rampart::{config, iplist, unifi_api};
+
+const GATEWAY_MARKER: &str = "/usr/bin/ubnt-device-info";
 
 #[derive(Parser, Debug)]
 #[command(name = "unifi-rampart")]
@@ -31,11 +34,25 @@ struct Cli {
     /// Run in dry-run mode, does not update the database
     #[arg(long)]
     dry_run: bool,
+
+    /// Install a cron job to run Rampart on a schedule. Only works when run on
+    /// the gateway itself. Optionally pass an interval like `4h` or `12h`;
+    /// defaults to once a day at 4am.
+    #[arg(long, num_args = 0..=1, default_missing_value = "daily", value_name = "INTERVAL")]
+    install: Option<String>,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
+
+    if let Some(interval) = cli.install.as_deref() {
+        env_logger::Builder::from_default_env()
+            .filter_level(log::LevelFilter::Info)
+            .init();
+        return op_install(interval);
+    }
+
     let mut cfg = config::load().context("Failed to load configuration")?;
 
     if cli.dry_run {
@@ -478,6 +495,81 @@ async fn op_clean(
     }
 }
 
+/// 5-field cron schedule (minute hour day month weekday) for `interval`.
+/// `"daily"` -> once a day at 4am. `"<N>h"` -> every N hours.
+fn cron_schedule(interval: &str) -> anyhow::Result<String> {
+    if interval == "daily" {
+        return Ok("0 4 * * *".to_string());
+    }
+
+    let hours: u32 = interval
+        .strip_suffix('h')
+        .and_then(|n| n.parse().ok())
+        .filter(|n| (1..=24).contains(n))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Invalid interval '{}': expected e.g. '4h' or '12h'",
+                interval
+            )
+        })?;
+
+    if hours == 24 {
+        Ok("0 4 * * *".to_string())
+    } else {
+        Ok(format!("0 */{} * * *", hours))
+    }
+}
+
+/// Installs a `/etc/cron.d` entry that re-runs the currently running binary on
+/// a schedule. Refuses to do anything unless this looks like a UniFi gateway,
+fn op_install(interval: &str) -> anyhow::Result<()> {
+    if !std::path::Path::new(GATEWAY_MARKER).exists() {
+        anyhow::bail!(
+            "This doesn't look like a UniFi gateway ({} not found); refusing to install a cron job.",
+            GATEWAY_MARKER
+        );
+    }
+
+    let schedule = cron_schedule(interval)?;
+
+    let exe = std::env::current_exe().context("Failed to determine path to the running binary")?;
+    let dir = exe
+        .parent()
+        .context("Running binary has no parent directory")?;
+    let name = exe
+        .file_name()
+        .context("Running binary has no file name")?
+        .to_string_lossy();
+
+    let cron_line = format!(
+        "{} root cd {} && ./{} >> /var/log/{}.log 2>&1\n",
+        schedule,
+        dir.display(),
+        name,
+        name
+    );
+
+    let cron_path = "/etc/cron.d/unifi-rampart";
+    std::fs::write(cron_path, &cron_line)
+        .with_context(|| format!("Failed to write cron file at {}", cron_path))?;
+    info!("Installed cron job at {}: {}", cron_path, cron_line.trim());
+
+    // /etc isn't persistent across UniFi OS reboots/firmware updates - write to on_boot.d to persist
+    let boot_script_path = "/data/on_boot.d/99-unifi-rampart.sh";
+    let boot_script = format!(
+        "#!/bin/sh\ncat > {} << 'EOF'\n{}EOF\n",
+        cron_path, cron_line
+    );
+    std::fs::write(boot_script_path, &boot_script)
+        .with_context(|| format!("Failed to write boot script at {}", boot_script_path))?;
+    std::fs::set_permissions(boot_script_path, std::fs::Permissions::from_mode(0o755))
+        .with_context(|| format!("Failed to make {} executable", boot_script_path))?;
+    info!("Installed boot script at {}", boot_script_path);
+    warn!("Make sure you have set up on_boot.d!!!");
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod prune_tests {
     use self::config::{ApplicationConfig, Config, ControllerConfig, IpListsConfig};
@@ -582,6 +674,36 @@ mod prune_tests {
         // A failed "Rampart_Foo" must not protect "Rampart_FooBar".
         let failed = vec!["Rampart_Foo".to_string()];
         assert!(is_orphaned_group("Rampart_FooBar", &failed, &kept(&[])));
+    }
+}
+
+#[cfg(test)]
+mod install_tests {
+    use super::*;
+
+    #[test]
+    fn daily_is_4am() {
+        assert_eq!(cron_schedule("daily").unwrap(), "0 4 * * *");
+    }
+
+    #[test]
+    fn hourly_interval_uses_step() {
+        assert_eq!(cron_schedule("4h").unwrap(), "0 */4 * * *");
+        assert_eq!(cron_schedule("12h").unwrap(), "0 */12 * * *");
+        assert_eq!(cron_schedule("1h").unwrap(), "0 */1 * * *");
+    }
+
+    #[test]
+    fn twenty_four_hours_collapses_to_daily() {
+        assert_eq!(cron_schedule("24h").unwrap(), "0 4 * * *");
+    }
+
+    #[test]
+    fn rejects_garbage() {
+        assert!(cron_schedule("0h").is_err());
+        assert!(cron_schedule("25h").is_err());
+        assert!(cron_schedule("nonsense").is_err());
+        assert!(cron_schedule("4").is_err());
     }
 }
 
