@@ -78,7 +78,7 @@ cd /data/custom/unifi-rampart
 From here you can set up a cron job to fire it at regular intervals.
 
 > [!NOTE]
-> When running on the gateway itself, set `url = "https://127.0.0.1"` and `verify_tls = false` in your `config.toml`. No SSH tunnel is needed - this is a normal HTTPS API call, not a raw MongoDB protocol connection.
+> When running on the gateway itself, set `url = "https://127.0.0.1"` and `verify_tls = false` in your `config.toml`.
 
 ### Running from Another Machine
 
@@ -86,10 +86,7 @@ You can run Rampart on any machine with network access to your controller over H
 
 ### Getting API Credentials
 
-You need either an API key or a username/password pair (not both):
-
-- **API key (recommended, UDM/UniFi OS controllers)**: Generate a local API key from the controller's UI, under Settings > Control Plane > Integrations (the exact path varies by firmware version). Set it as `api_key` in `config.toml`.
-- **Username/password (classic self-hosted controllers)**: Create a local admin account and set `username`/`password` in `config.toml`. Disable 2FA on this account - this flow does not handle 2FA challenges.
+Create a local admin account and set `username`/`password` in `config.toml`.
 
 ## Configuration
 

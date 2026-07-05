@@ -3,10 +3,8 @@ url = "https://192.168.1.1"          # Base URL of your UniFi controller
 site = "default"                      # UniFi site shortname to update (use "default" for the main site)
 is_unifi_os = true                    # true for UDM/UDR/Cloud Gateway, false for classic self-hosted controllers on :8443
 verify_tls = false                    # UniFi controllers typically use self-signed certs
-# Provide EITHER an api_key (recommended, UDM/UniFi OS only) OR a username+password pair, not both:
-api_key = ""                          # Local API key generated in the controller UI (Settings > Control Plane > Integrations, or similar, depending on firmware)
-# username = ""
-# password = ""
+username = ""                         # Local admin account username (disable 2FA on this account)
+password = ""                         # Local admin account password
 
 [application]
 log_level = "info"  # Logging verbosity level (trace, debug, info, warn, error)

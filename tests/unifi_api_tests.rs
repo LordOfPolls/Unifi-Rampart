@@ -2,34 +2,20 @@ use serde_json::{Value, json};
 use unifi_rampart::config::ControllerConfig;
 use unifi_rampart::models::unifi::FirewallGroup;
 use unifi_rampart::unifi_api::UnifiClient;
-use wiremock::matchers::{body_json, header, header_exists, method, path};
+use wiremock::matchers::{body_json, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 const CSRF_TOKEN: &str = "test-csrf-token-abc123";
 
-/// Credential-mode config pointed at the mock server, UniFi-OS style.
+/// Credential config pointed at the mock server, UniFi-OS style.
 fn cred_cfg(url: &str) -> ControllerConfig {
     ControllerConfig {
         url: url.to_string(),
         site: "default".to_string(),
         is_unifi_os: true,
         verify_tls: false,
-        api_key: None,
-        username: Some("admin".to_string()),
-        password: Some("password".to_string()),
-    }
-}
-
-/// API-key-mode config pointed at the mock server, UniFi-OS style.
-fn apikey_cfg(url: &str) -> ControllerConfig {
-    ControllerConfig {
-        url: url.to_string(),
-        site: "default".to_string(),
-        is_unifi_os: true,
-        verify_tls: false,
-        api_key: Some("my-api-key".to_string()),
-        username: None,
-        password: None,
+        username: "admin".to_string(),
+        password: "password".to_string(),
     }
 }
 
@@ -38,21 +24,15 @@ fn ok_envelope(data: Value) -> Value {
 }
 
 #[tokio::test]
-async fn new_rejects_ambiguous_auth() {
+async fn new_rejects_missing_credentials() {
     let server_url = "https://example.invalid";
+
     let mut cfg = cred_cfg(server_url);
-    cfg.api_key = Some("k".to_string()); // both api_key AND creds -> invalid
+    cfg.username = String::new();
     assert!(UnifiClient::new(&cfg).is_err());
 
-    // Neither auth mode.
     let mut cfg = cred_cfg(server_url);
-    cfg.username = None;
-    cfg.password = None;
-    assert!(UnifiClient::new(&cfg).is_err());
-
-    // Username without password.
-    let mut cfg = cred_cfg(server_url);
-    cfg.password = None;
+    cfg.password = String::new();
     assert!(UnifiClient::new(&cfg).is_err());
 }
 
@@ -151,31 +131,6 @@ async fn rotated_csrf_token_is_captured_and_resent() {
 }
 
 #[tokio::test]
-async fn api_key_mode_sends_header_and_never_logs_in() {
-    let server = MockServer::start().await;
-
-    // Any hit to a login endpoint should fail the test.
-    Mock::given(path("/api/auth/login"))
-        .respond_with(ResponseTemplate::new(500))
-        .expect(0)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("GET"))
-        .and(path("/proxy/network/api/s/default/rest/firewallgroup"))
-        .and(header("X-API-KEY", "my-api-key"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(ok_envelope(json!([]))))
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    let client = UnifiClient::new(&apikey_cfg(&server.uri())).unwrap();
-    client.login().await.unwrap(); // no-op
-    let groups = client.read_firewall_groups().await.unwrap();
-    assert!(groups.is_empty());
-}
-
-#[tokio::test]
 async fn read_firewall_groups_deserializes() {
     let server = MockServer::start().await;
 
@@ -191,12 +146,11 @@ async fn read_firewall_groups_deserializes() {
 
     Mock::given(method("GET"))
         .and(path("/proxy/network/api/s/default/rest/firewallgroup"))
-        .and(header("X-API-KEY", "my-api-key"))
         .respond_with(ResponseTemplate::new(200).set_body_json(payload))
         .mount(&server)
         .await;
 
-    let client = UnifiClient::new(&apikey_cfg(&server.uri())).unwrap();
+    let client = UnifiClient::new(&cred_cfg(&server.uri())).unwrap();
     let groups = client.read_firewall_groups().await.unwrap();
 
     assert_eq!(groups.len(), 1);
@@ -214,7 +168,6 @@ async fn upsert_create_posts_without_id() {
 
     Mock::given(method("POST"))
         .and(path("/proxy/network/api/s/default/rest/firewallgroup"))
-        .and(header("X-API-KEY", "my-api-key"))
         .and(body_json(json!({
             "name": "blocklist",
             "group_type": "address-group",
@@ -225,7 +178,7 @@ async fn upsert_create_posts_without_id() {
         .mount(&server)
         .await;
 
-    let client = UnifiClient::new(&apikey_cfg(&server.uri())).unwrap();
+    let client = UnifiClient::new(&cred_cfg(&server.uri())).unwrap();
     client
         .upsert_iplist(
             "blocklist",
@@ -253,7 +206,6 @@ async fn upsert_update_puts_full_body_to_id() {
         .and(path(
             "/proxy/network/api/s/default/rest/firewallgroup/aabbccddeeff001122334455",
         ))
-        .and(header("X-API-KEY", "my-api-key"))
         .and(body_json(json!({
             "_id": "aabbccddeeff001122334455",
             "name": "blocklist",
@@ -266,7 +218,7 @@ async fn upsert_update_puts_full_body_to_id() {
         .mount(&server)
         .await;
 
-    let client = UnifiClient::new(&apikey_cfg(&server.uri())).unwrap();
+    let client = UnifiClient::new(&cred_cfg(&server.uri())).unwrap();
     client
         .upsert_iplist(
             "blocklist",
@@ -331,7 +283,7 @@ async fn rc_error_envelope_on_200_is_error_with_msg() {
         .mount(&server)
         .await;
 
-    let client = UnifiClient::new(&apikey_cfg(&server.uri())).unwrap();
+    let client = UnifiClient::new(&cred_cfg(&server.uri())).unwrap();
     let err = client.read_firewall_groups().await.unwrap_err();
     assert!(
         err.to_string().contains("api.err.SomethingBroke"),
@@ -385,7 +337,7 @@ async fn delete_firewall_groups_skips_referenced_group_and_counts_the_rest() {
         .mount(&server)
         .await;
 
-    let client = UnifiClient::new(&apikey_cfg(&server.uri())).unwrap();
+    let client = UnifiClient::new(&cred_cfg(&server.uri())).unwrap();
     let deleted = client.delete_firewall_groups(&groups).await.unwrap();
     assert_eq!(deleted, 1, "only the unreferenced group should be deleted");
 }
@@ -394,12 +346,11 @@ async fn delete_firewall_groups_skips_referenced_group_and_counts_the_rest() {
 async fn classic_controller_uses_non_proxy_prefix() {
     let server = MockServer::start().await;
 
-    let mut cfg = apikey_cfg(&server.uri());
+    let mut cfg = cred_cfg(&server.uri());
     cfg.is_unifi_os = false;
 
     Mock::given(method("GET"))
         .and(path("/api/s/default/rest/firewallgroup"))
-        .and(header_exists("X-API-KEY"))
         .respond_with(ResponseTemplate::new(200).set_body_json(ok_envelope(json!([]))))
         .expect(1)
         .mount(&server)

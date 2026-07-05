@@ -7,43 +7,26 @@ use serde_json::{Value, json};
 use std::sync::RwLock;
 use std::time::Duration;
 
-/// How the client authenticates against the controller.
-enum AuthMode {
-    /// UDM / UniFi-OS API key sent via the `X-API-KEY` header. No login/session.
-    ApiKey(String),
-    /// Username/password login producing a session cookie (+ CSRF token).
-    Credentials { username: String, password: String },
-}
-
 /// A thin client for the UniFi controller's unofficial/classic REST API.
+/// Authenticates via username/password login producing a session cookie
+/// (+ CSRF token).
 pub struct UnifiClient {
     http: Client,
     /// Base URL without a trailing slash, e.g. "https://192.168.1.1".
     base: String,
     site: String,
     is_unifi_os: bool,
-    auth: AuthMode,
+    username: String,
+    password: String,
     /// CSRF token captured from responses, resent on mutating requests.
     csrf: RwLock<Option<String>>,
 }
 
 impl UnifiClient {
-    /// Build a client, validating that exactly one auth mode is configured
-    /// (`api_key` XOR `username` + `password`).
     pub fn new(cfg: &ControllerConfig) -> Result<Self> {
-        let auth = match (&cfg.api_key, &cfg.username, &cfg.password) {
-            (Some(key), None, None) => AuthMode::ApiKey(key.clone()),
-            (None, Some(username), Some(password)) => AuthMode::Credentials {
-                username: username.clone(),
-                password: password.clone(),
-            },
-            _ => {
-                return Err(anyhow!(
-                    "Exactly one auth mode must be configured: either 'api_key' \
-                     alone, or both 'username' and 'password' together"
-                ));
-            }
-        };
+        if cfg.username.is_empty() || cfg.password.is_empty() {
+            return Err(anyhow!("Both 'username' and 'password' must be configured"));
+        }
 
         let base = cfg.url.trim_end_matches('/').to_string();
 
@@ -60,13 +43,10 @@ impl UnifiClient {
             base,
             site: cfg.site.clone(),
             is_unifi_os: cfg.is_unifi_os,
-            auth,
+            username: cfg.username.clone(),
+            password: cfg.password.clone(),
             csrf: RwLock::new(None),
         })
-    }
-
-    fn is_credential_mode(&self) -> bool {
-        matches!(self.auth, AuthMode::Credentials { .. })
     }
 
     /// Build a site-scoped API URL for `path` (no leading slash).
@@ -92,13 +72,8 @@ impl UnifiClient {
         }
     }
 
-    /// Log in with username/password. No-op in API-key mode.
+    /// Log in with username/password.
     pub async fn login(&self) -> Result<()> {
-        let (username, password) = match &self.auth {
-            AuthMode::ApiKey(_) => return Ok(()),
-            AuthMode::Credentials { username, password } => (username, password),
-        };
-
         let url = if self.is_unifi_os {
             format!("{}/api/auth/login", self.base)
         } else {
@@ -106,7 +81,7 @@ impl UnifiClient {
         };
 
         debug!("Logging in to controller at {}", url);
-        let body = json!({ "username": username, "password": password });
+        let body = json!({ "username": self.username, "password": self.password });
         let resp = self
             .http
             .post(&url)
@@ -153,16 +128,9 @@ impl UnifiClient {
     ) -> Result<reqwest::Response> {
         let mut req = self.http.request(method.clone(), url);
 
-        match &self.auth {
-            AuthMode::ApiKey(key) => {
-                req = req.header("X-API-KEY", key);
-            }
-            AuthMode::Credentials { .. } => {
-                let mutating = matches!(*method, Method::POST | Method::PUT | Method::DELETE);
-                if mutating && let Some(token) = self.csrf.read().unwrap().clone() {
-                    req = req.header("x-csrf-token", token);
-                }
-            }
+        let mutating = matches!(*method, Method::POST | Method::PUT | Method::DELETE);
+        if mutating && let Some(token) = self.csrf.read().unwrap().clone() {
+            req = req.header("x-csrf-token", token);
         }
 
         if let Some(b) = body {
@@ -173,8 +141,7 @@ impl UnifiClient {
     }
 
     /// Execute a request, handling the response envelope and a single
-    /// re-login + retry on auth failure (credential mode only). Returns the
-    /// `data` value on success.
+    /// re-login + retry on auth failure. Returns the `data` value on success.
     async fn execute(&self, method: Method, url: &str, body: Option<Value>) -> Result<Value> {
         let mut relogin_attempted = false;
 
@@ -210,7 +177,7 @@ impl UnifiClient {
             let is_auth_error =
                 status == StatusCode::UNAUTHORIZED || (rc == Some("error") && is_auth_msg(&msg));
 
-            if is_auth_error && !relogin_attempted && self.is_credential_mode() {
+            if is_auth_error && !relogin_attempted {
                 debug!("Auth failure on {}, re-logging in and retrying once", url);
                 relogin_attempted = true;
                 self.login().await?;

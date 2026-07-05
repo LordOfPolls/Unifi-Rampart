@@ -62,7 +62,7 @@ async fn main() -> anyhow::Result<()> {
         unifi_api::UnifiClient::new(&cfg.controller).context("Failed to build UniFi API client")?;
 
     client.login().await.context(
-        "Failed to log in to UniFi controller. Check your controller URL/credentials/API key.",
+        "Failed to log in to UniFi controller. Check your controller URL and credentials.",
     )?;
 
     if cli.clean {
@@ -490,9 +490,8 @@ mod prune_tests {
                 site: "default".to_string(),
                 is_unifi_os: true,
                 verify_tls: false,
-                api_key: Some("key".to_string()),
-                username: None,
-                password: None,
+                username: "admin".to_string(),
+                password: "password".to_string(),
             },
             iplists: IpListsConfig { sources: vec![] },
             application: ApplicationConfig {

@@ -21,9 +21,8 @@ pub struct ControllerConfig {
     /// false = accept self-signed certs (common for local controllers).
     #[serde(default = "default_true")]
     pub verify_tls: bool,
-    pub api_key: Option<String>,
-    pub username: Option<String>,
-    pub password: Option<String>,
+    pub username: String,
+    pub password: String,
 }
 
 fn default_true() -> bool {
