@@ -67,6 +67,9 @@ just build-udm
 
 The binary will be at: `target/aarch64-unknown-linux-musl/release/unifi-rampart`
 
+> [!TIP]
+> Don't want to build it yourself? Every CI run uploads prebuilt binaries (`x86_64-unknown-linux-gnu`, `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`) as workflow artifacts - see the [Actions tab](https://github.com/lordofpolls/unifi-rampart/actions/workflows/rust.yml), open a run, and download from the Artifacts section.
+
 <details>
 <summary>Without <code>just</code></summary>
 
