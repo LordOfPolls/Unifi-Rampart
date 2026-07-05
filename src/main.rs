@@ -24,6 +24,10 @@ struct Cli {
     #[arg(long)]
     yes: bool,
 
+    /// Don't delete orphaned `group_prefix`-scoped firewall groups during sync
+    #[arg(long)]
+    no_prune: bool,
+
     /// Run in dry-run mode, does not update the database
     #[arg(long)]
     dry_run: bool,
@@ -67,7 +71,7 @@ async fn main() -> anyhow::Result<()> {
         }
         op_clean(&cfg, &client, cli.clean_all, cli.yes).await?;
     } else {
-        let failures = op_normal(&cfg, &client).await?;
+        let failures = op_normal(&cfg, &client, !cli.no_prune).await?;
         if failures > 0 {
             return Err(anyhow::anyhow!(
                 "{} iplist(s) failed to sync; see errors above",
@@ -104,6 +108,10 @@ fn sanity_check(cfg: &config::Config) -> anyhow::Result<()> {
 
 fn check_delta(before: &[String], after: &[String]) -> bool {
     if before.is_empty() {
+        if after.is_empty() {
+            // Nothing existed and nothing was parsed - don't create an empty group.
+            return false;
+        }
         info!("New List - Contains {} IPs", after.len());
         return true;
     }
@@ -124,7 +132,11 @@ fn check_delta(before: &[String], after: &[String]) -> bool {
     added > 0 || removed > 0
 }
 
-async fn op_normal(cfg: &config::Config, client: &unifi_api::UnifiClient) -> anyhow::Result<usize> {
+async fn op_normal(
+    cfg: &config::Config,
+    client: &unifi_api::UnifiClient,
+    prune: bool,
+) -> anyhow::Result<usize> {
     let firewall_groups = client
         .read_firewall_groups()
         .await
@@ -141,15 +153,22 @@ async fn op_normal(cfg: &config::Config, client: &unifi_api::UnifiClient) -> any
 
     let mut failures = 0usize;
 
+    // For pruning: the names this run wants to exist, and the group-name roots
+    // of sources that failed (whose groups must never be pruned).
+    let mut kept_names: HashSet<String> = HashSet::new();
+    let mut failed_roots: Vec<String> = Vec::new();
+
     for source in cfg.iplists.sources.iter().filter(|s| s.enabled) {
         info!("Processing iplist: {}", source.name);
         let group_name = format!("{}{}", cfg.application.group_prefix, source.name);
+        let v6_group_name = format!("{}_v6", group_name);
 
         let resp = match iplist::download(&source.url).await {
             Ok(r) => r,
             Err(e) => {
                 error!("Failed to download iplist '{}': {:#}", source.name, e);
                 failures += 1;
+                failed_roots.push(group_name);
                 continue;
             }
         };
@@ -166,9 +185,15 @@ async fn op_normal(cfg: &config::Config, client: &unifi_api::UnifiClient) -> any
             Err(e) => {
                 error!("Failed to parse iplist '{}': {:#}", source.name, e);
                 failures += 1;
+                failed_roots.push(group_name);
                 continue;
             }
         };
+
+        kept_names.extend(expected_group_names(cfg, &group_name, parsed.v4.len()));
+        if !parsed.v6.is_empty() {
+            kept_names.extend(expected_group_names(cfg, &v6_group_name, parsed.v6.len()));
+        }
 
         if let Err(e) = sync_group(
             cfg,
@@ -184,9 +209,8 @@ async fn op_normal(cfg: &config::Config, client: &unifi_api::UnifiClient) -> any
             failures += 1;
         }
 
-        if !parsed.v6.is_empty() {
-            let v6_group_name = format!("{}_v6", group_name);
-            if let Err(e) = sync_group(
+        if !parsed.v6.is_empty()
+            && let Err(e) = sync_group(
                 cfg,
                 client,
                 &firewall_groups,
@@ -195,13 +219,97 @@ async fn op_normal(cfg: &config::Config, client: &unifi_api::UnifiClient) -> any
                 parsed.v6,
             )
             .await
-            {
-                error!("Failed to sync iplist '{}': {:#}", v6_group_name, e);
-                failures += 1;
-            }
+        {
+            error!("Failed to sync iplist '{}': {:#}", v6_group_name, e);
+            failures += 1;
         }
     }
+
+    if prune
+        && let Err(e) =
+            prune_orphaned_groups(cfg, client, &firewall_groups, &failed_roots, &kept_names).await
+    {
+        error!("Failed to prune orphaned firewall groups: {:#}", e);
+        failures += 1;
+    }
+
     Ok(failures)
+}
+
+/// The exact group names `sync_group`/`sync_split` will write for `ip_count` entries.
+fn expected_group_names(cfg: &config::Config, group_name: &str, ip_count: usize) -> Vec<String> {
+    if ip_count > cfg.application.max_items_in_list && cfg.application.split_on_max_items {
+        let chunk_count = ip_count.div_ceil(cfg.application.max_items_in_list);
+        return (0..chunk_count)
+            .map(|i| format!("{}_{}", group_name, i))
+            .collect();
+    }
+    // Oversized without splitting: sync_group skips, leaving the existing group in place.
+    vec![group_name.to_string()]
+}
+
+/// Whether a prefix-matched group is stale: not wanted this run, and not owned
+/// by a source whose download/parse failed (we don't know its current truth).
+fn is_orphaned_group(name: &str, failed_roots: &[String], kept_names: &HashSet<String>) -> bool {
+    !kept_names.contains(name)
+        && !failed_roots
+            .iter()
+            .any(|root| name == root || name.starts_with(&format!("{}_", root)))
+}
+
+/// Delete `group_prefix`-scoped groups no longer needed by any enabled source
+/// (disabled/renamed sources, shrunk splits, vanished v6 entries). Groups of a
+/// source that failed this run are never pruned; groups still referenced by an
+/// active rule are skipped with a warning by `delete_firewall_groups`.
+async fn prune_orphaned_groups(
+    cfg: &config::Config,
+    client: &unifi_api::UnifiClient,
+    firewall_groups: &[FirewallGroup],
+    failed_roots: &[String],
+    kept_names: &HashSet<String>,
+) -> anyhow::Result<()> {
+    let prefix = &cfg.application.group_prefix;
+    if prefix.is_empty() {
+        // An empty prefix would match every group on the site - too broad to prune unattended.
+        return Ok(());
+    }
+
+    let stale: Vec<FirewallGroup> = firewall_groups
+        .iter()
+        .filter(|g| g.name.starts_with(prefix.as_str()))
+        .filter(|g| is_orphaned_group(&g.name, failed_roots, kept_names))
+        .cloned()
+        .collect();
+
+    if stale.is_empty() {
+        return Ok(());
+    }
+
+    let names = stale
+        .iter()
+        .map(|g| g.name.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    if cfg.application.dry_run {
+        info!(
+            "Dry run enabled, would prune {} orphaned firewall group(s): {}",
+            stale.len(),
+            names
+        );
+        return Ok(());
+    }
+
+    info!(
+        "Pruning {} orphaned firewall group(s): {}",
+        stale.len(),
+        names
+    );
+    client
+        .delete_firewall_groups(&stale)
+        .await
+        .context("Failed to prune orphaned firewall groups")?;
+    Ok(())
 }
 
 async fn sync_group(
@@ -243,8 +351,8 @@ async fn sync_group(
         .context(format!("Failed to upsert iplist '{}'", group_name))
 }
 
-/// Upload as `{group_name}_{i}` chunks, then delete stale trailing chunks
-/// left over from a previous, larger run.
+/// Upload as `{group_name}_{i}` chunks. Stale trailing chunks from a previous,
+/// larger run are removed by `prune_orphaned_groups`, not here.
 async fn sync_split(
     cfg: &config::Config,
     client: &unifi_api::UnifiClient,
@@ -257,8 +365,6 @@ async fn sync_split(
         "IP list '{}' exceeds max items limit of {}, splitting into multiple lists",
         group_name, cfg.application.max_items_in_list
     );
-
-    let chunk_count = ips.len().div_ceil(cfg.application.max_items_in_list);
 
     for (i, chunk) in ips.chunks(cfg.application.max_items_in_list).enumerate() {
         let chunk_name = format!("{}_{}", group_name, i);
@@ -280,26 +386,6 @@ async fn sync_split(
             .upsert_iplist(&chunk_name, group_type, chunk.to_vec(), existing_chunk)
             .await
             .context(format!("Failed to upsert iplist '{}'", chunk_name))?;
-    }
-
-    if !cfg.application.dry_run {
-        // The list may have shrunk since the last run; delete any chunks
-        // beyond the ones we just wrote.
-        let mut i = chunk_count;
-        loop {
-            let stale_name = format!("{}_{}", group_name, i);
-            let Some(stale) = firewall_groups.iter().find(|g| g.name == stale_name) else {
-                break;
-            };
-            match client
-                .delete_firewall_groups(std::slice::from_ref(stale))
-                .await
-            {
-                Ok(_) => info!("Deleted stale chunk '{}'", stale_name),
-                Err(e) => warn!("Failed to delete stale chunk '{}': {:#}", stale_name, e),
-            }
-            i += 1;
-        }
     }
 
     Ok(())
@@ -389,5 +475,139 @@ async fn op_clean(
     } else {
         info!("Clean operation cancelled by user");
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod prune_tests {
+    use self::config::{ApplicationConfig, Config, ControllerConfig, IpListsConfig};
+    use super::*;
+
+    fn test_config(max_items_in_list: usize, split_on_max_items: bool) -> Config {
+        Config {
+            controller: ControllerConfig {
+                url: "https://example.invalid".to_string(),
+                site: "default".to_string(),
+                is_unifi_os: true,
+                verify_tls: false,
+                api_key: Some("key".to_string()),
+                username: None,
+                password: None,
+            },
+            iplists: IpListsConfig { sources: vec![] },
+            application: ApplicationConfig {
+                log_level: "info".to_string(),
+                excluded: vec![],
+                max_items_in_list,
+                split_on_max_items,
+                aggregate: false,
+                dry_run: false,
+                allow_insecure_requests: false,
+                group_prefix: "Rampart_".to_string(),
+            },
+        }
+    }
+
+    #[test]
+    fn expected_group_names_under_limit_is_just_the_base_name() {
+        let cfg = test_config(10_000, false);
+        assert_eq!(
+            expected_group_names(&cfg, "Rampart_Feed", 5),
+            vec!["Rampart_Feed"]
+        );
+    }
+
+    #[test]
+    fn expected_group_names_over_limit_without_split_keeps_base_name() {
+        let cfg = test_config(10, false);
+        assert_eq!(
+            expected_group_names(&cfg, "Rampart_Feed", 100),
+            vec!["Rampart_Feed"]
+        );
+    }
+
+    #[test]
+    fn expected_group_names_over_limit_with_split_lists_all_chunks() {
+        let cfg = test_config(10, true);
+        assert_eq!(
+            expected_group_names(&cfg, "Rampart_Feed", 25),
+            vec!["Rampart_Feed_0", "Rampart_Feed_1", "Rampart_Feed_2"]
+        );
+    }
+
+    #[test]
+    fn expected_group_names_exact_multiple_of_limit_uses_minimal_chunks() {
+        let cfg = test_config(10, true);
+        assert_eq!(
+            expected_group_names(&cfg, "Rampart_Feed", 20),
+            vec!["Rampart_Feed_0", "Rampart_Feed_1"]
+        );
+    }
+
+    fn kept(names: &[&str]) -> HashSet<String> {
+        names.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn orphaned_when_no_enabled_source_claims_the_name() {
+        // Disabled/renamed source: not kept, not failed.
+        assert!(is_orphaned_group("Rampart_Stale", &[], &kept(&[])));
+    }
+
+    #[test]
+    fn not_orphaned_when_owning_source_failed_this_run() {
+        // Download/parse failed, so we don't know its current truth - must not prune.
+        let failed = vec!["Rampart_Feed".to_string()];
+        assert!(!is_orphaned_group("Rampart_Feed_3", &failed, &kept(&[])));
+        assert!(!is_orphaned_group("Rampart_Feed", &failed, &kept(&[])));
+    }
+
+    #[test]
+    fn orphaned_stale_chunk_when_owning_source_succeeded_but_shrank() {
+        // Split feed shrank from 4 chunks to 2 this run.
+        let k = kept(&["Rampart_Feed_0", "Rampart_Feed_1"]);
+        assert!(is_orphaned_group("Rampart_Feed_2", &[], &k));
+        assert!(!is_orphaned_group("Rampart_Feed_0", &[], &k));
+    }
+
+    #[test]
+    fn orphaned_when_v6_shrank_to_zero_this_run() {
+        // Feed used to have v6 entries, now has none: the v6 group is stale.
+        let k = kept(&["Rampart_Feed"]);
+        assert!(is_orphaned_group("Rampart_Feed_v6", &[], &k));
+        assert!(!is_orphaned_group("Rampart_Feed", &[], &k));
+    }
+
+    #[test]
+    fn failed_root_only_protects_its_underscore_delimited_family() {
+        // A failed "Rampart_Foo" must not protect "Rampart_FooBar".
+        let failed = vec!["Rampart_Foo".to_string()];
+        assert!(is_orphaned_group("Rampart_FooBar", &failed, &kept(&[])));
+    }
+}
+
+#[cfg(test)]
+mod delta_tests {
+    use super::*;
+
+    #[test]
+    fn no_change_when_both_before_and_after_are_empty() {
+        assert!(!check_delta(&[], &[]));
+    }
+
+    #[test]
+    fn change_when_first_ever_list_is_non_empty() {
+        assert!(check_delta(&[], &["1.2.3.4".to_string()]));
+    }
+
+    #[test]
+    fn change_when_existing_list_shrinks_to_empty() {
+        assert!(check_delta(&["1.2.3.4".to_string()], &[]));
+    }
+
+    #[test]
+    fn no_change_when_lists_are_identical() {
+        let list = vec!["1.2.3.4".to_string(), "5.6.7.8".to_string()];
+        assert!(!check_delta(&list, &list));
     }
 }

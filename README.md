@@ -132,6 +132,15 @@ Deletes firewall groups from the controller, should only be used as a last resor
 > [!CAUTION]
 > This operation cannot be undone and may break existing firewall rules that reference these groups.
 
+**Pruning (on by default):**
+
+Every normal sync also deletes any `group_prefix`-scoped firewall group that no longer corresponds to an enabled source - for example after you disable or rename a source, or a split feed shrinks and needs fewer `_0`, `_1`, ... chunk groups. A group is only pruned once Rampart has successfully re-downloaded and re-parsed the sources it might belong to for this run, so a transient download failure never causes a group to be deleted. Groups still referenced by an active firewall rule are skipped with a warning, same as `--clean`. Requires `group_prefix` to be set.
+
+To disable pruning and leave orphaned groups in place:
+```bash
+cargo run --release -- --no-prune
+```
+
 ## Threat Intelligence Sources
 
 The included config has several common feeds, but you can add any publicly accessible IP lists. Each source creates a firewall group with the specified `name`.
